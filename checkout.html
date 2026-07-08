@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Checkout | Zenzo</title>
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-11">
+  </head>
+  <body class="checkout-page">
+    <main class="checkout-shell">
+      <nav class="checkout-nav" aria-label="Checkout navigation">
+        <a class="brand" href="index.html" aria-label="Zenzo home">
+          <span class="brand__logo-frame"><img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="brand__logo" width="520" height="138"></span>
+        </a>
+        <a class="primary-link" href="index.html#catalog">Back to shop</a>
+      </nav>
+
+      <div class="checkout-layout">
+        <section class="checkout-panel" aria-labelledby="checkoutTitle">
+          <div class="checkout-panel__body">
+            <p class="eyebrow">Checkout</p>
+            <h1 id="checkoutTitle">Shipping and UPI payment</h1>
+            <form class="form-grid" id="checkoutForm">
+              <label class="field">
+                Full name
+                <input name="name" autocomplete="name" required>
+              </label>
+              <label class="field">
+                Email address
+                <input name="email" type="email" autocomplete="email" required>
+              </label>
+              <label class="field">
+                Mobile number
+                <input name="phone" inputmode="tel" autocomplete="tel" required>
+              </label>
+              <label class="field field--full">
+                Delivery address
+                <textarea name="address" autocomplete="street-address" required></textarea>
+              </label>
+              <label class="field">
+                City
+                <input name="city" autocomplete="address-level2" required>
+              </label>
+              <label class="field">
+                State
+                <input name="state" autocomplete="address-level1" required>
+              </label>
+              <label class="field">
+                PIN code
+                <input name="pin" inputmode="numeric" autocomplete="postal-code" required>
+              </label>
+              <div class="upi-panel field--full" aria-label="UPI payment instructions">
+                <strong>Secure UPI checkout</strong>
+                <p>Pay through the secure payment window. UPI is available at checkout and Zenzo confirms paid orders automatically.</p>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <aside class="checkout-panel" aria-labelledby="orderTitle">
+          <div class="checkout-panel__body">
+            <h2 id="orderTitle">Order summary</h2>
+            <div class="order-list" id="orderList"></div>
+            <div class="checkout-total">
+              <span>Subtotal</span>
+              <strong id="checkoutSubtotal">₹0</strong>
+            </div>
+            <button class="place-order" form="checkoutForm" type="submit">Pay securely</button>
+            <p class="checkout-note" id="checkoutNote">UPI payment is handled through the payment gateway. The UPI ID is not shown to buyers.</p>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="checkout.js?v=zenzo-race-theme-11"></script>
+  </body>
+</html>
