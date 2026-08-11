@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin | Zenzo</title>
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-18">
+  </head>
+  <body class="checkout-page">
+    <main class="checkout-shell">
+      <nav class="checkout-nav" aria-label="Admin navigation">
+        <a class="brand" href="index.html" aria-label="Zenzo home">
+          <span class="brand__logo-frame"><img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="brand__logo" width="520" height="138"></span>
+        </a>
+        <a class="primary-link" href="index.html#catalog">Back to shop</a>
+      </nav>
+
+      <section class="checkout-panel admin-login" id="loginPanel" aria-labelledby="loginTitle">
+        <div class="checkout-panel__body">
+          <p class="eyebrow">Admin</p>
+          <h1 id="loginTitle">Zenzo product login</h1>
+          <form class="form-grid" id="loginForm">
+            <label class="field field--full">
+              Email address
+              <input type="email" name="email" autocomplete="username" required>
+            </label>
+            <label class="field field--full">
+              Password
+              <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button class="place-order field--full" type="submit">Log in</button>
+            <p class="checkout-note field--full" id="loginMessage">Admin email: <strong>zenzo.org@gmail.com</strong></p>
+          </form>
+        </div>
+      </section>
+
+      <div class="checkout-layout admin-dashboard" id="adminDashboard" hidden>
+        <section class="checkout-panel" aria-labelledby="productFormTitle">
+          <div class="checkout-panel__body">
+            <p class="eyebrow">Products</p>
+            <h1 id="productFormTitle">Add new product</h1>
+            <form class="form-grid" id="productForm">
+              <label class="field field--full">
+                Product name
+                <input name="name" required>
+              </label>
+              <label class="field">
+                Collection
+                <select name="collection" required>
+                  <option>Hot Wheels</option>
+                  <option>Figurines</option>
+                  <option>3D collectibles</option>
+                </select>
+              </label>
+              <label class="field">
+                Series
+                <input name="series" value="Assorted Hot Wheels" required>
+              </label>
+              <label class="field">
+                Year
+                <input name="year" inputmode="numeric" value="2025" required>
+              </label>
+              <label class="field">
+                Condition
+                <select name="condition" required>
+                  <option>Sealed Pack</option>
+                  <option>Sealed</option>
+                  <option>Loose</option>
+                  <option>Premium</option>
+                </select>
+              </label>
+              <label class="field">
+                Price in INR
+                <input name="price" inputmode="numeric" required>
+              </label>
+              <label class="field">
+                Stock
+                <input name="stock" inputmode="numeric" value="1" required>
+              </label>
+              <label class="field field--full">
+                Product photo
+                <input name="image" type="file" accept="image/*">
+              </label>
+              <label class="field field--full">
+                Notes
+                <textarea name="notes" required>Sealed Hot Wheels pack photographed from available stock.</textarea>
+              </label>
+              <button class="place-order field--full" type="submit">Add product</button>
+              <p class="checkout-note field--full">Products added here appear in the selected collection after saving.</p>
+            </form>
+          </div>
+        </section>
+
+        <aside class="checkout-panel" aria-labelledby="customProductsTitle">
+          <div class="checkout-panel__body">
+            <h2 id="customProductsTitle">Added products</h2>
+            <div class="admin-products" id="adminProducts"></div>
+            <button class="remove-button admin-logout" id="logoutButton" type="button">Log out</button>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script src="admin.js?v=zenzo-race-theme-18"></script>
+  </body>
+</html>
