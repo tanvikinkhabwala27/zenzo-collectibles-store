@@ -119,6 +119,7 @@ function normalizeProduct(input) {
   return {
     id: input.id || `admin-${slugify(name)}-${Date.now()}`,
     name,
+    collection: String(input.collection || "Hot Wheels").trim(),
     series: String(input.series || "Assorted Hot Wheels").trim(),
     year: Number(input.year) || new Date().getFullYear(),
     condition: String(input.condition || "Sealed Pack").trim(),
