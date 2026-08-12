@@ -39,8 +39,14 @@ async function asset(env, request, pathname) {
   });
 }
 
+async function publicAsset(env, request, pathname) {
+  const direct = await asset(env, request, pathname);
+  if (direct.status !== 404) return direct;
+  return asset(env, request, `/public${pathname}`);
+}
+
 async function readProducts(env, request) {
-  const response = await asset(env, request, "/data/products.json");
+  const response = await publicAsset(env, request, "/data/products.json");
   if (!response.ok) return [];
   return response.json();
 }
@@ -124,10 +130,10 @@ export default {
       }
 
       const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-      const direct = await asset(env, request, pathname);
+      const direct = await publicAsset(env, request, pathname);
       if (direct.status !== 404) return direct;
 
-      return asset(env, request, "/index.html");
+      return publicAsset(env, request, "/index.html");
     } catch (error) {
       return json({ error: error.message || "Something went wrong." }, 500);
     }
