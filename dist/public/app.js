@@ -209,7 +209,6 @@ let inventory = [...baseInventory, ...loadAdminProducts()];
 const state = {
   query: "",
   collection: "all",
-  condition: "all",
   sort: "featured",
   cart: JSON.parse(localStorage.getItem("dieCastGarageCart") || "[]")
 };
@@ -253,9 +252,8 @@ function filteredInventory() {
   const query = state.query.trim().toLowerCase();
   const cars = inventory.filter((car) => {
     const matchesCollection = state.collection === "all" || productCollection(car) === state.collection;
-    const matchesCondition = state.condition === "all" || car.condition === state.condition;
     const haystack = `${car.name} ${productCollection(car)} ${car.series} ${car.year} ${car.condition}`.toLowerCase();
-    return matchesCollection && matchesCondition && haystack.includes(query);
+    return matchesCollection && haystack.includes(query);
   });
 
   return cars.sort((a, b) => {
@@ -305,7 +303,6 @@ function carMarkup(car) {
           <span>${productCollection(car)}</span>
           <span>${car.series}</span>
           <span>${car.year}</span>
-          <span>${car.condition}</span>
           <span>${stockLabel}</span>
         </p>
         <a class="details-link" href="${detailsHref}">View details</a>
@@ -339,7 +336,7 @@ function renderCart() {
         <div class="cart-item">
           <div>
             <h3>${car.name}</h3>
-            <p>${car.condition} &middot; ${car.series} &middot; Qty ${quantity}</p>
+            <p>${car.series} &middot; Qty ${quantity}</p>
           </div>
           <strong>${money.format(car.price * quantity)}</strong>
           <button class="remove-button" type="button" data-remove="${car.id}">Remove</button>
@@ -388,14 +385,6 @@ cartItems.addEventListener("click", (event) => {
   if (index >= 0) state.cart.splice(index, 1);
   renderProducts();
   renderCart();
-});
-
-document.querySelectorAll("[data-condition]").forEach((button) => {
-  button.addEventListener("click", () => {
-    state.condition = button.dataset.condition;
-    document.querySelectorAll("[data-condition]").forEach((chip) => chip.classList.toggle("is-active", chip === button));
-    renderProducts();
-  });
 });
 
 document.querySelectorAll("[data-collection]").forEach((button) => {

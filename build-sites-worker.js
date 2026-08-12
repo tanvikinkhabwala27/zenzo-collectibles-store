@@ -16,8 +16,11 @@ const textFiles = [
 
 const assetFiles = [
   "assets/hero-shelf-fast.jpg",
+  "assets/collector-shelf-v2.png",
+  "assets/collector-shelf.png",
   "assets/zenzo-logo-fast.jpg",
   "assets/zenzo-logo-mark.png",
+  "assets/zenzo-logo.png",
   "assets/hot-wheels-f1-5-pack.jpeg",
   "assets/hot-wheels-mystery-models.jpeg"
 ];

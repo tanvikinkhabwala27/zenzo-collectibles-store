@@ -237,7 +237,6 @@ function renderProduct() {
       <p class="meta">
         <span>${product.series}</span>
         <span>${product.year}</span>
-        <span>${product.condition}</span>
         <span>${stockLabel}</span>
       </p>
       <div class="detail-block">

@@ -47,7 +47,7 @@ function renderCheckout() {
       <div class="order-line">
         <div>
           <h3>${item.name}</h3>
-          <p>${item.condition} &middot; Qty ${quantity}</p>
+          <p>Qty ${quantity}</p>
         </div>
         <strong>${money.format(item.price * quantity)}</strong>
       </div>
