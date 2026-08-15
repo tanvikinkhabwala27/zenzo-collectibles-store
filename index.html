@@ -6,7 +6,7 @@
     <title>Zenzo</title>
     <meta name="description" content="Collector storefront for selling Hot Wheels and 1:64 die-cast cars.">
     <link rel="preload" as="image" href="assets/zenzo-logo-mark.png">
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-20">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-21">
   </head>
   <body>
     <header class="site-header">
@@ -36,26 +36,33 @@
     </header>
 
     <main>
-      <section class="toolbar" aria-label="Catalog controls">
-        <label class="search">
-          <span class="sr-only">Search cars</span>
-          <input id="searchInput" type="search" placeholder="Search name, collection, series">
-        </label>
-        <label class="select-label">
-          <span class="sr-only">Sort products</span>
-          <select id="sortSelect">
-            <option value="featured">Featured</option>
-            <option value="priceAsc">Price low to high</option>
-            <option value="priceDesc">Price high to low</option>
-            <option value="yearDesc">Newest year</option>
-          </select>
-        </label>
-      </section>
-
       <section class="catalog" id="catalog" aria-labelledby="catalogTitle">
-        <div class="section-heading">
-          <p class="eyebrow">Available now</p>
-          <h2 id="catalogTitle">Current listings</h2>
+        <div class="catalog-hero">
+          <div>
+            <p class="eyebrow">Collector storefront</p>
+            <h1 id="catalogTitle">Built for collectors, by collectors.</h1>
+            <p>Your one-stop destination for Hot Wheels, figurines, and 3D printed collectibles across India.</p>
+          </div>
+          <div class="catalog-stats" aria-label="Store highlights">
+            <span>Authentic photos</span>
+            <span>UPI checkout</span>
+            <span>Limited stock</span>
+          </div>
+        </div>
+        <div class="toolbar" aria-label="Catalog controls">
+          <label class="search">
+            <span class="sr-only">Search cars</span>
+            <input id="searchInput" type="search" placeholder="Search products">
+          </label>
+          <label class="select-label">
+            <span class="sr-only">Sort products</span>
+            <select id="sortSelect">
+              <option value="featured">Featured</option>
+              <option value="priceAsc">Price low to high</option>
+              <option value="priceDesc">Price high to low</option>
+              <option value="yearDesc">Newest year</option>
+            </select>
+          </label>
         </div>
         <div class="product-grid" id="productGrid"></div>
         <p class="empty-state" id="emptyState" hidden>No matching cars found.</p>
@@ -84,6 +91,6 @@
       <a class="footer-admin-link" href="admin.html">Admin</a>
     </footer>
 
-    <script src="app.js?v=zenzo-race-theme-20"></script>
+    <script src="app.js?v=zenzo-race-theme-21"></script>
   </body>
 </html>
