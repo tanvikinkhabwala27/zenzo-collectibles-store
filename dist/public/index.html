@@ -7,7 +7,7 @@
     <meta name="description" content="Collector storefront for selling Hot Wheels and 1:64 die-cast cars.">
     <link rel="preload" as="image" href="assets/zenzo-logo-mark.png">
     <link rel="preload" as="image" href="assets/hero-shelf-fast.jpg">
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-24">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-25">
   </head>
   <body>
     <header class="site-header">
@@ -35,6 +35,7 @@
             <input id="searchInput" type="search" placeholder="Search">
           </label>
           <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
+            <span class="cart-button__icon" aria-hidden="true">+</span>
             <span aria-hidden="true">Cart</span>
             <span class="cart-button__count" id="cartCount">0</span>
           </button>
@@ -55,6 +56,7 @@
       <div class="hero__visual">
         <img class="hero__image" src="assets/hero-shelf-fast.jpg" alt="Collector shelf with die-cast cars and display pieces" width="1600" height="900" fetchpriority="high">
       </div>
+      <div class="hero__rail" aria-hidden="true"></div>
     </section>
 
     <main>
@@ -174,6 +176,6 @@
       </div>
     </footer>
 
-    <script src="app.js?v=zenzo-race-theme-24"></script>
+    <script src="app.js?v=zenzo-race-theme-25"></script>
   </body>
 </html>
