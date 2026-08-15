@@ -232,7 +232,7 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
 });
 
-const assetVersion = "zenzo-race-theme-22";
+const assetVersion = "zenzo-race-theme-23";
 
 function productCollection(product) {
   return product.collection || "Hot Wheels";
@@ -390,8 +390,11 @@ cartItems.addEventListener("click", (event) => {
 document.querySelectorAll("[data-collection]").forEach((button) => {
   button.addEventListener("click", () => {
     state.collection = button.dataset.collection;
-    document.querySelectorAll("[data-collection]").forEach((card) => card.classList.toggle("is-active", card === button));
+    document.querySelectorAll("[data-collection]").forEach((card) => {
+      card.classList.toggle("is-active", card.dataset.collection === state.collection);
+    });
     renderProducts();
+    document.querySelector("#catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 });
 
@@ -408,6 +411,7 @@ sortSelect.addEventListener("change", () => {
 cartButton.addEventListener("click", openCart);
 closeCart.addEventListener("click", hideCart);
 scrim.addEventListener("click", hideCart);
+document.querySelector("[data-footer-cart]")?.addEventListener("click", openCart);
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") hideCart();

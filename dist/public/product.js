@@ -174,7 +174,7 @@ const money = new Intl.NumberFormat("en-US", {
   currency: "INR",
   maximumFractionDigits: 0
 });
-const assetVersion = "zenzo-race-theme-22";
+const assetVersion = "zenzo-race-theme-23";
 
 function productCollection(item) {
   return item.collection || "Hot Wheels";

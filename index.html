@@ -7,7 +7,7 @@
     <meta name="description" content="Collector storefront for selling Hot Wheels and 1:64 die-cast cars.">
     <link rel="preload" as="image" href="assets/zenzo-logo-mark.png">
     <link rel="preload" as="image" href="assets/hero-shelf-fast.jpg">
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-22">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-23">
   </head>
   <body>
     <header class="site-header">
@@ -15,39 +15,87 @@
         <a class="brand" href="#catalog" aria-label="Zenzo home">
           <span class="brand__logo-frame"><img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="brand__logo" width="520" height="138" fetchpriority="high"></span>
         </a>
-        <div class="collection-list topbar__collections" aria-label="Collection filter">
-          <button class="collection-card collection-card--all is-active" type="button" data-collection="all">
-            <strong>All</strong>
+        <div class="topbar__nav" aria-label="Shop navigation">
+          <button class="nav-filter is-active" type="button" data-collection="all">
+            Shop
           </button>
-          <button class="collection-card collection-card--hotwheels" type="button" data-collection="Hot Wheels">
-            <strong>Hot Wheels</strong>
+          <button class="nav-filter" type="button" data-collection="Hot Wheels">
+            Hot Wheels
           </button>
-          <button class="collection-card collection-card--figurines" type="button" data-collection="Figurines">
-            <strong>Figurines</strong>
+          <button class="nav-filter" type="button" data-collection="Figurines">
+            Figurines
           </button>
-          <button class="collection-card collection-card--printed" type="button" data-collection="3D collectibles">
-            <strong>3D</strong>
+          <button class="nav-filter" type="button" data-collection="3D collectibles">
+            3D Prints
           </button>
         </div>
-        <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
-          <span aria-hidden="true">Cart</span>
-          <span class="cart-button__count" id="cartCount">0</span>
-        </button>
+        <div class="topbar__actions">
+          <label class="nav-search">
+            <span class="sr-only">Search products</span>
+            <input id="searchInput" type="search" placeholder="Search">
+          </label>
+          <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
+            <span aria-hidden="true">Cart</span>
+            <span class="cart-button__count" id="cartCount">0</span>
+          </button>
+        </div>
       </nav>
     </header>
 
     <section class="hero" aria-labelledby="heroTitle">
-      <img class="hero__image" src="assets/hero-shelf-fast.jpg" alt="Collector shelf with die-cast cars and display pieces" width="1600" height="900" fetchpriority="high">
-      <div class="hero__shade" aria-hidden="true"></div>
       <div class="hero__content">
-        <p class="eyebrow">Zenzo collectibles</p>
+        <p class="eyebrow">Zenzo Collectibles</p>
         <h1 id="heroTitle">Collectibles worth showing off.</h1>
         <p class="hero__copy">Your one-stop destination for Hot Wheels, figurines, and 3D printed collectibles, featuring iconic diecast cars and custom designed display pieces.</p>
-        <a class="primary-link" href="#catalog">Shop the drop</a>
+        <a class="primary-link" href="#catalog">Shop the drop -></a>
+      </div>
+      <div class="hero__visual">
+        <img class="hero__image" src="assets/hero-shelf-fast.jpg" alt="Collector shelf with die-cast cars and display pieces" width="1600" height="900" fetchpriority="high">
       </div>
     </section>
 
     <main>
+      <section class="trust-strip" aria-label="Shop reassurance">
+        <div>
+          <strong>Actual Product Photos</strong>
+          <span>See what you're actually buying</span>
+        </div>
+        <div>
+          <strong>UPI Checkout</strong>
+          <span>Simple & secure payment</span>
+        </div>
+        <div>
+          <strong>India Focused</strong>
+          <span>Built for collectors in India</span>
+        </div>
+      </section>
+
+      <section class="collections" aria-labelledby="collectionsTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Browse faster</p>
+            <h2 id="collectionsTitle">Shop by Collection</h2>
+          </div>
+        </div>
+        <div class="collection-list" aria-label="Collection filter">
+          <button class="collection-card collection-card--hotwheels" type="button" data-collection="Hot Wheels">
+            <img src="assets/catalog/f1-5-pack.jpg" alt="Hot Wheels Formula 1 Race Team 5-Pack">
+            <span>Hot Wheels</span>
+            <strong>Explore -></strong>
+          </button>
+          <button class="collection-card collection-card--figurines" type="button" data-collection="Figurines">
+            <img src="assets/collector-shelf-v2.png" alt="Zenzo collector display shelf">
+            <span>Figurines</span>
+            <strong>Explore -></strong>
+          </button>
+          <button class="collection-card collection-card--printed" type="button" data-collection="3D collectibles">
+            <img src="assets/collector-shelf.png" alt="Zenzo collectible display pieces">
+            <span>3D Prints</span>
+            <strong>Explore -></strong>
+          </button>
+        </div>
+      </section>
+
       <section class="catalog" id="catalog" aria-labelledby="catalogTitle">
         <div class="section-heading">
           <div>
@@ -56,10 +104,6 @@
           </div>
         </div>
         <div class="toolbar" aria-label="Catalog controls">
-          <label class="search">
-            <span class="sr-only">Search cars</span>
-            <input id="searchInput" type="search" placeholder="Search products">
-          </label>
           <label class="select-label">
             <span class="sr-only">Sort products</span>
             <select id="sortSelect">
@@ -72,6 +116,14 @@
         </div>
         <div class="product-grid" id="productGrid"></div>
         <p class="empty-state" id="emptyState" hidden>No matching cars found.</p>
+      </section>
+
+      <section class="brand-section" aria-labelledby="brandTitle">
+        <div>
+          <p class="eyebrow">About Zenzo</p>
+          <h2 id="brandTitle">Made for collectors.</h2>
+          <p>Explore a focused collection of diecast cars and display-ready collectibles, photographed from the available Zenzo drop and organized for easy shopping.</p>
+        </div>
       </section>
     </main>
 
@@ -92,11 +144,30 @@
     </aside>
     <div class="scrim" id="scrim" hidden></div>
 
-    <footer>
-      <p>Zenzo collector resale shop. Not affiliated with Mattel or Hot Wheels.</p>
-      <a class="footer-admin-link" href="admin.html">Admin</a>
+    <footer class="site-footer">
+      <div class="footer-grid">
+        <div>
+          <span class="footer-logo">Zenzo</span>
+          <p>Zenzo collector resale shop.</p>
+        </div>
+        <div>
+          <h2>Shop</h2>
+          <a href="#catalog">Current listings</a>
+          <a href="#collectionsTitle">Collections</a>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <a href="checkout.html">Checkout</a>
+          <button class="footer-cart-link" type="button" data-footer-cart>Cart</button>
+        </div>
+        <div>
+          <h2>Legal</h2>
+          <p>Not affiliated with Mattel or Hot Wheels.</p>
+          <a class="footer-admin-link" href="admin.html">Admin</a>
+        </div>
+      </div>
     </footer>
 
-    <script src="app.js?v=zenzo-race-theme-22"></script>
+    <script src="app.js?v=zenzo-race-theme-23"></script>
   </body>
 </html>
