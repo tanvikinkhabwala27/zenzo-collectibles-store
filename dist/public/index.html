@@ -6,7 +6,8 @@
     <title>Zenzo</title>
     <meta name="description" content="Collector storefront for selling Hot Wheels and 1:64 die-cast cars.">
     <link rel="preload" as="image" href="assets/zenzo-logo-mark.png">
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-21">
+    <link rel="preload" as="image" href="assets/hero-shelf-fast.jpg">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-22">
   </head>
   <body>
     <header class="site-header">
@@ -35,18 +36,28 @@
       </nav>
     </header>
 
+    <section class="hero" aria-labelledby="heroTitle">
+      <img class="hero__image" src="assets/hero-shelf-fast.jpg" alt="Collector shelf with die-cast cars and display pieces" width="1600" height="900" fetchpriority="high">
+      <div class="hero__shade" aria-hidden="true"></div>
+      <div class="hero__content">
+        <p class="eyebrow">Zenzo collectibles</p>
+        <h1 id="heroTitle">Collectibles worth showing off.</h1>
+        <p class="hero__copy">Your one-stop destination for Hot Wheels, figurines, and 3D printed collectibles, featuring iconic diecast cars and custom designed display pieces.</p>
+        <div class="hero__badges" aria-label="Store highlights">
+          <span>Actual product photos</span>
+          <span>UPI checkout</span>
+          <span>India focused</span>
+        </div>
+        <a class="primary-link" href="#catalog">Shop the drop</a>
+      </div>
+    </section>
+
     <main>
       <section class="catalog" id="catalog" aria-labelledby="catalogTitle">
-        <div class="catalog-hero">
+        <div class="section-heading">
           <div>
-            <p class="eyebrow">Collector storefront</p>
-            <h1 id="catalogTitle">Built for collectors, by collectors.</h1>
-            <p>Your one-stop destination for Hot Wheels, figurines, and 3D printed collectibles across India.</p>
-          </div>
-          <div class="catalog-stats" aria-label="Store highlights">
-            <span>Authentic photos</span>
-            <span>UPI checkout</span>
-            <span>Limited stock</span>
+            <p class="eyebrow">Available now</p>
+            <h2 id="catalogTitle">Current listings</h2>
           </div>
         </div>
         <div class="toolbar" aria-label="Catalog controls">
@@ -91,6 +102,6 @@
       <a class="footer-admin-link" href="admin.html">Admin</a>
     </footer>
 
-    <script src="app.js?v=zenzo-race-theme-21"></script>
+    <script src="app.js?v=zenzo-race-theme-22"></script>
   </body>
 </html>

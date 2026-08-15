@@ -73,12 +73,17 @@ a {
 
 .hero {
   position: relative;
-  min-height: min(760px, 92vh);
+  width: min(1240px, calc(100% - 32px));
+  min-height: 430px;
+  margin: 28px auto 0;
   display: grid;
   align-items: center;
   isolation: isolate;
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
   background: #111820;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
 }
 
 .hero__image,
@@ -92,17 +97,17 @@ a {
 .hero__image {
   object-fit: cover;
   object-position: center;
-  filter: saturate(1.08) contrast(0.92);
-  opacity: 0.64;
+  filter: saturate(1.08) contrast(0.96);
+  opacity: 0.8;
   z-index: -2;
 }
 
 .hero__shade {
   z-index: -1;
   background:
-    linear-gradient(120deg, rgba(229, 57, 53, 0.42), rgba(8, 120, 201, 0.32) 48%, rgba(23, 143, 105, 0.32)),
-    linear-gradient(90deg, rgba(9, 17, 28, 0.82), rgba(9, 17, 28, 0.28) 50%, rgba(9, 17, 28, 0.62)),
-    linear-gradient(0deg, rgba(9, 17, 28, 0.7), transparent 52%);
+    linear-gradient(118deg, rgba(255, 59, 59, 0.42) 0 22%, rgba(8, 19, 32, 0.64) 45%, rgba(4, 13, 21, 0.82) 100%),
+    linear-gradient(90deg, rgba(4, 7, 13, 0.9), rgba(6, 13, 22, 0.58) 48%, rgba(4, 10, 16, 0.52)),
+    linear-gradient(0deg, rgba(4, 7, 13, 0.72), transparent 60%);
 }
 
 .site-header {
@@ -212,13 +217,13 @@ a {
 }
 
 .hero__content {
-  width: min(1180px, calc(100% - 36px));
-  margin: 54px auto 92px;
+  width: min(620px, calc(100% - 40px));
+  margin: clamp(28px, 6vw, 62px);
   color: #fff;
-  text-align: center;
+  text-align: left;
   display: grid;
-  justify-items: center;
-  gap: 20px;
+  justify-items: start;
+  gap: 16px;
 }
 
 .eyebrow {
@@ -239,19 +244,35 @@ p {
 
 .hero h1 {
   margin: 0;
-  max-width: none;
-  font-family: "Brush Script MT", "Segoe Print", "Trebuchet MS", Arial, sans-serif;
-  font-size: clamp(3.2rem, 8vw, 7rem);
-  line-height: 0.86;
+  max-width: 620px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(2.8rem, 6.2vw, 5.8rem);
+  line-height: 0.94;
   letter-spacing: 0;
   text-shadow: 0 16px 34px rgba(0, 0, 0, 0.46);
 }
 
 .hero__copy {
-  max-width: 760px;
-  margin: 2px auto 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1.15rem;
+  max-width: 590px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 1.05rem;
+}
+
+.hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hero__badges span {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: #e7f4ff;
+  background: rgba(3, 8, 15, 0.52);
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .hero__tagline {
@@ -345,7 +366,7 @@ p {
 }
 
 .hero .primary-link {
-  min-width: 238px;
+  min-width: 172px;
   color: #ffffff !important;
   background: linear-gradient(180deg, #ff4b3f 0%, #e3292e 100%);
   border: 1px solid rgba(255, 255, 255, 0.72);
@@ -625,7 +646,7 @@ p {
 
 .catalog {
   width: min(1240px, calc(100% - 32px));
-  margin: 28px auto 64px;
+  margin: 22px auto 64px;
   padding: 22px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1446,6 +1467,10 @@ footer p {
     font-size: 2rem;
   }
 
+  .hero {
+    min-height: 390px;
+  }
+
   .catalog-hero {
     grid-template-columns: 1fr;
     align-items: start;
@@ -1497,9 +1522,24 @@ footer p {
     height: 34px;
   }
 
+  .hero {
+    width: min(100% - 24px, 1180px);
+    min-height: 430px;
+    margin-top: 18px;
+    border-radius: 12px;
+  }
+
+  .hero__image {
+    object-position: 62% center;
+  }
+
   .hero__content {
     width: calc(100% - 32px);
-    margin: 64px 16px 86px;
+    margin: 28px 16px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.35rem, 13vw, 3.7rem);
   }
 
   .cart-button {
