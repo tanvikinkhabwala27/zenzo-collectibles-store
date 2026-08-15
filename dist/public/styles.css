@@ -106,14 +106,27 @@ a {
     linear-gradient(0deg, rgba(9, 17, 28, 0.7), transparent 52%);
 }
 
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(120deg, rgba(255, 59, 59, 0.24), rgba(53, 168, 255, 0.18)),
+    rgba(5, 9, 16, 0.9);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+}
+
 .topbar {
-  position: absolute;
-  inset: 0 0 auto 0;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 22px clamp(18px, 4vw, 56px);
+  gap: 18px;
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 14px 0;
 }
 
 .topbar__actions {
@@ -145,6 +158,12 @@ a {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+.topbar__collections {
+  flex: 1;
+  max-width: 620px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .cart-button,
@@ -505,6 +524,21 @@ p {
   font-size: 0.92rem;
 }
 
+.topbar__collections .collection-card {
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.topbar__collections .collection-card::before {
+  display: none;
+}
+
+.topbar__collections .collection-card strong {
+  font-size: 0.88rem;
+}
+
 .collection-card--hotwheels {
   background:
     linear-gradient(135deg, rgba(255, 59, 59, 0.32), rgba(53, 168, 255, 0.1)),
@@ -536,7 +570,7 @@ p {
 
 .toolbar {
   width: min(1180px, calc(100% - 32px));
-  margin: 34px auto 0;
+  margin: 26px auto 0;
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;
   gap: 14px;
@@ -1337,8 +1371,14 @@ footer p {
 }
 
 @media (max-width: 900px) {
-  .hero h1 {
-    font-size: clamp(2.7rem, 10vw, 4.6rem);
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .topbar__collections {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
   }
 
   .showcase {
@@ -1389,12 +1429,10 @@ footer p {
 }
 
 @media (max-width: 640px) {
-  .hero {
-    min-height: 620px;
-  }
-
   .topbar {
-    padding: 16px;
+    width: min(100% - 24px, 1180px);
+    gap: 10px;
+    padding: 12px 0;
   }
 
   .brand__logo-frame {
@@ -1415,20 +1453,6 @@ footer p {
   .admin-link {
     min-height: 42px;
     padding: 9px 10px;
-  }
-
-  .hero h1 {
-    max-width: none;
-    font-size: clamp(2.35rem, 13vw, 3.8rem);
-  }
-
-  .hero__copy {
-    font-size: 1rem;
-  }
-
-  .hero__motion {
-    width: min(520px, 86vw);
-    height: 22px;
   }
 
   .showcase {
@@ -1471,9 +1495,23 @@ footer p {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .topbar__collections {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
   .collection-card {
     min-height: 48px;
     padding: 9px 8px;
+  }
+
+  .topbar__collections .collection-card {
+    min-height: 36px;
+    padding: 7px 6px;
+  }
+
+  .topbar__collections .collection-card strong {
+    font-size: 0.78rem;
   }
 
   .chip {

@@ -5,57 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zenzo</title>
     <meta name="description" content="Collector storefront for selling Hot Wheels and 1:64 die-cast cars.">
-    <link rel="preload" as="image" href="assets/hero-shelf-fast.jpg">
     <link rel="preload" as="image" href="assets/zenzo-logo-mark.png">
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-18">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-20">
   </head>
   <body>
-    <header class="hero">
-      <img src="assets/hero-shelf-fast.jpg" alt="Display shelf with collectible die-cast toy cars" class="hero__image" width="1280" height="683" fetchpriority="high">
-      <div class="hero__shade"></div>
+    <header class="site-header">
       <nav class="topbar" aria-label="Primary navigation">
         <a class="brand" href="#catalog" aria-label="Zenzo home">
           <span class="brand__logo-frame"><img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="brand__logo" width="520" height="138" fetchpriority="high"></span>
         </a>
-        <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
-          <span aria-hidden="true">Cart</span>
-          <span class="cart-button__count" id="cartCount">0</span>
-        </button>
-      </nav>
-      <section class="hero__content" aria-labelledby="pageTitle">
-        <h1 id="pageTitle" class="hero__headline">
-          <span class="hero__line hero__line--primary">Race-ready</span>
-          <span class="hero__line hero__line--accent">Hot Wheels</span>
-        </h1>
-        <div class="hero__motion" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <p class="hero__copy">Your one-stop destination for collectibles. Explore Hot Wheels, figurines, and 3D printed collectibles, from iconic diecast cars to custom designed display pieces.</p>
-        <p class="hero__tagline">Built for collectors, by collectors.</p>
-        <a class="primary-link" href="#catalog">Shop the drop</a>
-      </section>
-    </header>
-
-    <main>
-      <section class="showcase" aria-labelledby="showcaseTitle">
-        <div class="showcase__copy">
-          <p class="eyebrow">Collector display</p>
-          <h2 id="showcaseTitle">Fresh drops, shelf-ready pieces</h2>
-          <p>Browse collector pieces and 1:64 finds curated for Indian buyers.</p>
-        </div>
-        <img src="assets/collector-shelf-v2.png?v=zenzo-race-theme-19" alt="Collector shelf with die-cast toy cars and display pieces" loading="lazy">
-      </section>
-
-      <section class="collections" aria-labelledby="collectionsTitle">
-        <div class="collections__intro">
-          <p class="eyebrow">Collections</p>
-          <h2 id="collectionsTitle">Browse collections</h2>
-        </div>
-        <div class="collection-list" aria-label="Collection filter">
+        <div class="collection-list topbar__collections" aria-label="Collection filter">
           <button class="collection-card collection-card--all is-active" type="button" data-collection="all">
-            <strong>All collectibles</strong>
+            <strong>All</strong>
           </button>
           <button class="collection-card collection-card--hotwheels" type="button" data-collection="Hot Wheels">
             <strong>Hot Wheels</strong>
@@ -64,11 +25,17 @@
             <strong>Figurines</strong>
           </button>
           <button class="collection-card collection-card--printed" type="button" data-collection="3D collectibles">
-            <strong>3D collectibles</strong>
+            <strong>3D</strong>
           </button>
         </div>
-      </section>
+        <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
+          <span aria-hidden="true">Cart</span>
+          <span class="cart-button__count" id="cartCount">0</span>
+        </button>
+      </nav>
+    </header>
 
+    <main>
       <section class="toolbar" aria-label="Catalog controls">
         <label class="search">
           <span class="sr-only">Search cars</span>
@@ -117,6 +84,6 @@
       <a class="footer-admin-link" href="admin.html">Admin</a>
     </footer>
 
-    <script src="app.js?v=zenzo-race-theme-18"></script>
+    <script src="app.js?v=zenzo-race-theme-20"></script>
   </body>
 </html>
