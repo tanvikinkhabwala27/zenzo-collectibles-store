@@ -3781,3 +3781,191 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Mockup-matched collection cards v28 */
+.collections {
+  margin-top: 54px !important;
+}
+
+.collections .section-heading {
+  display: flex !important;
+  align-items: end !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  margin-bottom: 18px !important;
+}
+
+.section-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--zenzo-red);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.section-action:hover {
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.collections .collection-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 18px !important;
+}
+
+.collections .collection-card {
+  isolation: isolate;
+  min-height: 0 !important;
+  aspect-ratio: 1.58 / 1 !important;
+  align-items: end !important;
+  justify-content: start !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 59, 59, 0.1), transparent 34%),
+    linear-gradient(180deg, #0b121d, #05090f) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+.collections .collection-card--hotwheels {
+  border-color: rgba(255, 59, 59, 0.44) !important;
+  background:
+    radial-gradient(circle at 22% 10%, rgba(255, 59, 59, 0.3), transparent 34%),
+    linear-gradient(150deg, #17080d, #06101a 68%) !important;
+}
+
+.collections .collection-card--figurines {
+  border-color: rgba(53, 168, 255, 0.38) !important;
+  background:
+    radial-gradient(circle at 38% 10%, rgba(53, 168, 255, 0.24), transparent 36%),
+    linear-gradient(150deg, #071524, #060a12 68%) !important;
+}
+
+.collections .collection-card--printed {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background:
+    radial-gradient(circle at 40% 5%, rgba(255, 255, 255, 0.12), transparent 34%),
+    linear-gradient(150deg, #10151c, #05090f 68%) !important;
+}
+
+.collections .collection-card::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.08), transparent 20%),
+    linear-gradient(135deg, rgba(255, 59, 59, 0.18), transparent 34%),
+    linear-gradient(315deg, rgba(53, 168, 255, 0.16), transparent 38%) !important;
+  opacity: 0.8 !important;
+  pointer-events: none;
+}
+
+.collections .collection-card::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: auto 0 0 0 !important;
+  z-index: 2 !important;
+  height: 64% !important;
+  background:
+    linear-gradient(180deg, transparent, rgba(3, 7, 13, 0.5) 35%, rgba(3, 7, 13, 0.96)),
+    linear-gradient(90deg, rgba(3, 7, 13, 0.96), rgba(3, 7, 13, 0.46) 58%, transparent) !important;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+.collections .collection-card img {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  opacity: 0.84 !important;
+  filter: saturate(1.12) contrast(1.08) brightness(0.82) !important;
+}
+
+.collections .collection-card--hotwheels img {
+  object-position: center 46% !important;
+}
+
+.collections .collection-card--figurines img,
+.collections .collection-card--printed img {
+  object-position: center !important;
+}
+
+.collections .collection-card span,
+.collections .collection-card strong {
+  position: relative !important;
+  z-index: 3 !important;
+  align-self: stretch !important;
+  width: 100% !important;
+  text-align: left !important;
+}
+
+.collections .collection-card span {
+  margin-top: auto !important;
+  padding: 0 24px !important;
+  color: #ffffff !important;
+  font-size: clamp(1.32rem, 1.7vw, 1.8rem) !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.72);
+}
+
+.collections .collection-card strong {
+  padding: 7px 24px 24px !important;
+  color: var(--zenzo-red) !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+.collections .collection-card--figurines strong,
+.collections .collection-card--printed strong {
+  color: #8fd0ff !important;
+}
+
+.collections .collection-card:hover,
+.collections .collection-card.is-active {
+  border-color: rgba(255, 59, 59, 0.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 34px rgba(0, 0, 0, 0.26) !important;
+  transform: translateY(-3px) !important;
+}
+
+.collections .collection-card:hover img {
+  opacity: 0.94 !important;
+  transform: scale(1.045) !important;
+}
+
+@media (max-width: 900px) {
+  .collections .section-heading {
+    align-items: start !important;
+  }
+
+  .collections .collection-card {
+    aspect-ratio: 1.75 / 1 !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .collections .section-heading {
+    display: block !important;
+  }
+
+  .section-action {
+    margin-top: 6px;
+  }
+
+  .collections .collection-card {
+    aspect-ratio: 1.28 / 1 !important;
+  }
+}
