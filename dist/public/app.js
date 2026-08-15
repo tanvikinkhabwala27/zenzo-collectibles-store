@@ -232,7 +232,7 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
 });
 
-const assetVersion = "zenzo-race-theme-23";
+const assetVersion = "zenzo-race-theme-24";
 
 function productCollection(product) {
   return product.collection || "Hot Wheels";
