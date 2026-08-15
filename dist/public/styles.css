@@ -4173,3 +4173,22 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 82% 82% at center, #000 0%, #000 64%, rgba(0, 0, 0, 0.86) 78%, transparent 100%);
   mask-image: radial-gradient(ellipse 82% 82% at center, #000 0%, #000 64%, rgba(0, 0, 0, 0.86) 78%, transparent 100%);
 }
+
+/* Unboxed catalog showcase v34 */
+.product-photo--showcase {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  border-radius: 0;
+  object-fit: cover !important;
+  opacity: 1;
+  filter: contrast(1.02) saturate(1.04) brightness(0.98);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.product-card:hover .product-photo--showcase {
+  filter: contrast(1.03) saturate(1.08) brightness(1.04);
+  transform: scale(1.025) !important;
+}

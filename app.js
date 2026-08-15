@@ -232,7 +232,24 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
 });
 
-const assetVersion = "zenzo-race-theme-33";
+const assetVersion = "zenzo-race-theme-36";
+
+const showcaseImages = {
+  "admin-f1-stand-1783480383065": "assets/showcase/admin-f1-stand.webp",
+  "f1-race-team-5-pack": "assets/showcase/f1-race-team-5-pack.webp",
+  "mystery-models-foil-pack": "assets/showcase/mystery-models-foil-pack.webp",
+  "assorted-2-pack-blue-orange": "assets/showcase/assorted-2-pack-blue-orange.webp",
+  "assorted-3-pack-sports-cars": "assets/showcase/assorted-3-pack-sports-cars.webp",
+  "classic-black-racer": "assets/showcase/classic-black-racer.webp",
+  "classic-red-racer": "assets/showcase/classic-red-racer.webp",
+  "classic-orange-pickup": "assets/showcase/classic-orange-pickup.webp",
+  "assorted-jdm-3-pack": "assets/showcase/assorted-jdm-3-pack.webp",
+  "assorted-city-3-pack": "assets/showcase/assorted-city-3-pack.webp",
+  "classic-silver-wagon": "assets/showcase/classic-silver-wagon.webp",
+  "assorted-character-3-pack": "assets/showcase/assorted-character-3-pack.webp",
+  "assorted-performance-3-pack": "assets/showcase/assorted-performance-3-pack.webp",
+  "batman-barbie-2-pack": "assets/showcase/batman-barbie-2-pack.webp"
+};
 
 function productCollection(product) {
   return product.collection || "Hot Wheels";
@@ -273,9 +290,13 @@ function carMarkup(car) {
   const remaining = car.stock - inCart;
   const stockLabel = car.stock > 1 ? `${remaining} of ${car.stock} left` : remaining > 0 ? "1 available" : "Sold out";
   const buttonText = remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "Sold out";
-  const imageSrc = car.image && car.image.startsWith("data:") ? car.image : `${car.image}?v=${assetVersion}`;
+  const showcaseImage = showcaseImages[car.id];
+  const displayImage = showcaseImage || car.image;
+  const imageSrc = displayImage && displayImage.startsWith("data:") ? displayImage : `${displayImage}?v=${assetVersion}`;
   const detailsHref = `product.html?id=${encodeURIComponent(car.id)}`;
-  const media = car.image ? `<img class="product-photo" src="${imageSrc}" alt="${car.imageAlt || car.name}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;"><span class="photo-fallback" hidden>Photo unavailable</span>` : `
+  const imageClass = showcaseImage ? "product-photo product-photo--showcase" : "product-photo";
+  const imageAlt = showcaseImage ? `Unboxed showcase view of ${car.name}` : car.imageAlt || car.name;
+  const media = displayImage ? `<img class="${imageClass}" src="${imageSrc}" alt="${imageAlt}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;"><span class="photo-fallback" hidden>Photo unavailable</span>` : `
         <div class="toy-car" aria-hidden="true">
           <div class="toy-car__roof"></div>
           <div class="toy-car__body"></div>

@@ -25,8 +25,9 @@ const assetFiles = [
   "assets/hot-wheels-mystery-models.jpeg"
 ];
 
-for (const folder of ["assets/catalog", "assets/products"]) {
+for (const folder of ["assets/catalog", "assets/products", "assets/showcase"]) {
   for (const file of fs.readdirSync(path.join(root, folder))) {
+    if (folder === "assets/showcase" && !file.endsWith(".webp")) continue;
     if (!file.includes("original")) assetFiles.push(`${folder}/${file}`);
   }
 }
@@ -37,6 +38,7 @@ function mime(file) {
   if (file.endsWith(".js")) return "text/javascript; charset=utf-8";
   if (file.endsWith(".json")) return "application/json; charset=utf-8";
   if (file.endsWith(".png")) return "image/png";
+  if (file.endsWith(".webp")) return "image/webp";
   if (file.endsWith(".jpg") || file.endsWith(".jpeg")) return "image/jpeg";
   return "application/octet-stream";
 }
