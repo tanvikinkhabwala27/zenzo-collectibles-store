@@ -3969,3 +3969,125 @@ body {
     aspect-ratio: 1.28 / 1 !important;
   }
 }
+
+/* Collection gallery refinement v29 */
+.collections {
+  width: min(1180px, calc(100% - 48px)) !important;
+  margin-top: 42px !important;
+}
+
+.collections .section-heading {
+  margin-bottom: 14px !important;
+}
+
+.collections .section-heading h2 {
+  font-size: 1.6rem !important;
+  line-height: 1.15 !important;
+}
+
+.collections .section-action {
+  min-height: 28px;
+  font-size: 0.76rem;
+}
+
+.collections .collection-list {
+  gap: 14px !important;
+}
+
+.collections .collection-card {
+  aspect-ratio: 1.18 / 1 !important;
+  border-radius: 8px !important;
+}
+
+.collections .collection-card::before {
+  background: linear-gradient(135deg, rgba(255, 59, 59, 0.16), transparent 38%) !important;
+  opacity: 0.72 !important;
+}
+
+.collections .collection-card--figurines::before,
+.collections .collection-card--printed::before {
+  background: linear-gradient(135deg, rgba(53, 168, 255, 0.16), transparent 42%) !important;
+}
+
+.collections .collection-card::after {
+  height: 56% !important;
+  background: linear-gradient(180deg, transparent, rgba(3, 7, 13, 0.64) 58%, rgba(3, 7, 13, 0.94)) !important;
+}
+
+.collections .collection-card img {
+  opacity: 1 !important;
+  filter: saturate(1.04) contrast(1.04) brightness(0.9) !important;
+}
+
+.collections .collection-card--hotwheels img {
+  object-position: 55% center !important;
+}
+
+.collections .collection-card--figurines img {
+  object-position: 53% center !important;
+}
+
+.collections .collection-card--printed img {
+  object-position: 58% center !important;
+}
+
+.collections .collection-card span {
+  padding: 0 18px !important;
+  font-size: 1.15rem !important;
+  line-height: 1.1 !important;
+}
+
+.collections .collection-card strong {
+  padding: 6px 18px 18px !important;
+  font-size: 0.72rem !important;
+}
+
+@media (max-width: 900px) {
+  .collections {
+    width: min(100% - 32px, 1180px) !important;
+  }
+
+  .collections .collection-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .collections .collection-card {
+    aspect-ratio: 1.05 / 1 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .collections .collection-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .collections .collection-card {
+    aspect-ratio: 1.65 / 1 !important;
+  }
+
+  .catalog .toolbar {
+    width: 100% !important;
+    margin: 12px 0 18px !important;
+  }
+
+  .catalog .select-label,
+  .catalog .select-label select {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .collections .section-heading {
+    display: flex !important;
+    align-items: end !important;
+  }
+
+  .collections .section-action {
+    margin-top: 0;
+    font-size: 0.7rem;
+  }
+
+  .collections .collection-card {
+    aspect-ratio: 1.35 / 1 !important;
+  }
+}
