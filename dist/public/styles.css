@@ -3782,6 +3782,38 @@ body {
   }
 }
 
+/* Mobile navigation polish v37 */
+@media (max-width: 1080px) {
+  .topbar__nav {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topbar__nav::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    overflow: hidden;
+  }
+
+  .topbar__nav {
+    gap: 22px !important;
+    padding: 3px 2px 4px !important;
+  }
+
+  .topbar__nav a,
+  .nav-filter {
+    flex: 0 0 auto;
+    min-height: 32px !important;
+  }
+}
+
 /* Mockup-matched collection cards v28 */
 .collections {
   margin-top: 54px !important;
