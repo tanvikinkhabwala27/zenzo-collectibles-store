@@ -15,6 +15,13 @@ function json(data, status = 200) {
   return response(JSON.stringify(data), "application/json; charset=utf-8", status);
 }
 
+function assetMime(pathname) {
+  if (pathname.endsWith(".webp")) return "image/webp";
+  if (pathname.endsWith(".png")) return "image/png";
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
+  return "application/octet-stream";
+}
+
 async function createRazorpayOrder(env, order) {
   if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) return null;
 
@@ -98,6 +105,7 @@ export default {
         const assetResponse = await env.ASSETS.fetch(request);
         const headers = new Headers(assetResponse.headers);
         headers.set("cache-control", "public, max-age=86400");
+        headers.set("content-type", assetMime(pathname));
         return new Response(assetResponse.body, {
           status: assetResponse.status,
           statusText: assetResponse.statusText,
