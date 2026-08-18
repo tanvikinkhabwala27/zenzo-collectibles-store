@@ -172,8 +172,21 @@ export default {
 
 fs.writeFileSync(path.join(root, "dist/server/index.js"), worker);
 
+fs.writeFileSync(
+  path.join(root, "dist/server/wrangler.json"),
+  JSON.stringify({
+    name: "zenzo-collectibles",
+    compatibility_date: "2026-05-15",
+    compatibility_flags: ["nodejs_compat"],
+    main: "index.js",
+    rules: [{ type: "ESModule", globs: ["**/*.js", "**/*.mjs"] }],
+    no_bundle: true,
+    assets: { directory: "../client" }
+  })
+);
+
 for (const file of [...textFiles, ...staticFiles]) {
-  const destination = path.join(root, "dist", file);
+  const destination = path.join(root, "dist/client", file);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.copyFileSync(path.join(root, file), destination);
 }

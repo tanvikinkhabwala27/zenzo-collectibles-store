@@ -1,0 +1,1 @@
+{"name":"zenzo-collectibles","compatibility_date":"2026-05-15","compatibility_flags":["nodejs_compat"],"main":"index.js","rules":[{"type":"ESModule","globs":["**/*.js","**/*.mjs"]}],"no_bundle":true,"assets":{"directory":"../client"}}
