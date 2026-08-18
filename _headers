@@ -1,0 +1,11 @@
+/assets/*
+  Cache-Control: public, max-age=86400
+
+/assets/collection-*.webp
+  Content-Type: image/webp
+
+/assets/catalog/*
+  Content-Type: image/webp
+
+/assets/showcase/*
+  Content-Type: image/webp

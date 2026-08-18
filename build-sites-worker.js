@@ -189,11 +189,11 @@ fs.writeFileSync(
     main: "index.js",
     rules: [{ type: "ESModule", globs: ["**/*.js", "**/*.mjs"] }],
     no_bundle: true,
-    assets: { directory: "../client", run_worker_first: true }
+    assets: { directory: "../client", binding: "ASSETS", run_worker_first: false }
   })
 );
 
-for (const file of [...textFiles, ...staticFiles]) {
+for (const file of [...textFiles, ...staticFiles, "_headers"]) {
   const destination = path.join(root, "dist/client", file);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.copyFileSync(path.join(root, file), destination);
