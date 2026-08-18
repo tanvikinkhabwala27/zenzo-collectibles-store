@@ -14,21 +14,6 @@ const textFiles = [
   "admin.js"
 ];
 
-const assetFiles = [
-  "assets/hero-shelf-fast.jpg",
-  "assets/zenzo-logo-mark.png",
-  "assets/collection-hot-wheels.webp",
-  "assets/collection-figurines.webp",
-  "assets/collection-3d-prints.webp"
-];
-
-for (const folder of ["assets/catalog", "assets/showcase"]) {
-  for (const file of fs.readdirSync(path.join(root, folder))) {
-    if (!file.endsWith(".webp")) continue;
-    if (!file.includes("original")) assetFiles.push(`${folder}/${file}`);
-  }
-}
-
 function mime(file) {
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
@@ -51,19 +36,8 @@ textRoutes["/"] = textRoutes["/index.html"];
 
 const productData = fs.readFileSync(path.join(root, "data/products.json"), "utf8");
 
-const binaryRoutes = {};
-for (const file of assetFiles) {
-  const absolute = path.join(root, file);
-  if (!fs.existsSync(absolute)) continue;
-  binaryRoutes[`/${file.replaceAll("\\", "/")}`] = {
-    body: fs.readFileSync(absolute).toString("base64"),
-    type: mime(file)
-  };
-}
-
 const worker = `const textRoutes = ${JSON.stringify(textRoutes)};\n` +
 `const productData = ${JSON.stringify(productData)};\n` +
-`const binaryRoutes = ${JSON.stringify(binaryRoutes)};\n` +
 `
 function response(body, type, status = 200, cacheControl = "no-cache") {
   return new Response(body, {
@@ -77,13 +51,6 @@ function response(body, type, status = 200, cacheControl = "no-cache") {
 
 function json(data, status = 200) {
   return response(JSON.stringify(data), "application/json; charset=utf-8", status);
-}
-
-function decodeBase64(value) {
-  const raw = atob(value);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
-  return bytes;
 }
 
 async function createRazorpayOrder(env, order) {
@@ -165,14 +132,15 @@ export default {
         return json({ error: "Admin tools are not enabled on this public site." }, 404);
       }
 
-      if (binaryRoutes[pathname]) {
-        const asset = binaryRoutes[pathname];
-        return response(
-          decodeBase64(asset.body),
-          asset.type,
-          200,
-          "public, max-age=31536000, immutable"
-        );
+      if (pathname.startsWith("/assets/")) {
+        const assetResponse = await env.ASSETS.fetch(request);
+        const headers = new Headers(assetResponse.headers);
+        headers.set("cache-control", "public, max-age=86400");
+        return new Response(assetResponse.body, {
+          status: assetResponse.status,
+          statusText: assetResponse.statusText,
+          headers
+        });
       }
 
       if (textRoutes[pathname]) {
