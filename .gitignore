@@ -6,3 +6,6 @@ npm-debug.log*
 data/orders.json
 assets/showcase/*.png
 dist/public/assets/showcase/*.png
+.publish-fast/
+zenzo-site*.tar.gz
+zenzo-site*.test

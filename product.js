@@ -7,7 +7,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1499,
     stock: 7,
-    image: "assets/catalog/f1-5-pack.jpg",
+    image: "assets/catalog/f1-5-pack.webp",
     imageAlt: "Hot Wheels Formula 1 Race Team 5-Pack in retail packaging",
     notes: "Set of 5 Formula 1-themed 1:64 die-cast race cars. New carded packs; 7 available."
   },
@@ -19,7 +19,7 @@ const baseInventory = [
     condition: "Sealed",
     price: 249,
     stock: 25,
-    image: "assets/catalog/mystery-models.jpg",
+    image: "assets/catalog/mystery-models.webp",
     imageAlt: "Hot Wheels Mystery Models sealed foil pack",
     notes: "Sealed surprise pack with one 1:64 Hot Wheels vehicle and matching sticker inside. 25 available."
   },
@@ -31,7 +31,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 899,
     stock: 1,
-    image: "assets/catalog/blue-orange-2-pack.jpg",
+    image: "assets/catalog/blue-orange-2-pack.webp",
     imageAlt: "Two sealed Hot Wheels packs with blue and orange cars",
     notes: "Two sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -43,7 +43,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1199,
     stock: 1,
-    image: "assets/catalog/sports-car-3-pack.jpg",
+    image: "assets/catalog/sports-car-3-pack.webp",
     imageAlt: "Three sealed Hot Wheels sports car packs",
     notes: "Three sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -55,7 +55,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 699,
     stock: 1,
-    image: "assets/catalog/classic-black-racer.jpg",
+    image: "assets/catalog/classic-black-racer.webp",
     imageAlt: "Sealed Hot Wheels classic black race car",
     notes: "Single sealed Hot Wheels pack with actual product photo."
   },
@@ -67,7 +67,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 699,
     stock: 1,
-    image: "assets/catalog/classic-red-racer.jpg",
+    image: "assets/catalog/classic-red-racer.webp",
     imageAlt: "Sealed Hot Wheels classic red race car",
     notes: "Single sealed Hot Wheels pack with actual product photo."
   },
@@ -79,7 +79,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 699,
     stock: 1,
-    image: "assets/catalog/classic-orange-pickup.jpg",
+    image: "assets/catalog/classic-orange-pickup.webp",
     imageAlt: "Sealed Hot Wheels classic orange pickup",
     notes: "Single sealed Hot Wheels pack with actual product photo."
   },
@@ -91,7 +91,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1199,
     stock: 1,
-    image: "assets/catalog/jdm-3-pack.jpg",
+    image: "assets/catalog/jdm-3-pack.webp",
     imageAlt: "Three sealed Hot Wheels JDM-style packs",
     notes: "Three sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -103,7 +103,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1199,
     stock: 1,
-    image: "assets/catalog/city-3-pack.jpg",
+    image: "assets/catalog/city-3-pack.webp",
     imageAlt: "Three sealed Hot Wheels city vehicle packs",
     notes: "Three sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -115,7 +115,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 699,
     stock: 1,
-    image: "assets/catalog/classic-silver-wagon.jpg",
+    image: "assets/catalog/classic-silver-wagon.webp",
     imageAlt: "Sealed Hot Wheels classic silver wagon",
     notes: "Single sealed Hot Wheels pack with actual product photo."
   },
@@ -127,7 +127,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1199,
     stock: 1,
-    image: "assets/catalog/character-concept-3-pack.jpg",
+    image: "assets/catalog/character-concept-3-pack.webp",
     imageAlt: "Three sealed Hot Wheels character and concept vehicle packs",
     notes: "Three sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -139,7 +139,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 1199,
     stock: 1,
-    image: "assets/catalog/performance-3-pack.jpg",
+    image: "assets/catalog/performance-3-pack.webp",
     imageAlt: "Three sealed Hot Wheels performance vehicle packs",
     notes: "Three sealed Hot Wheels packs photographed from the actual available stock."
   },
@@ -151,7 +151,7 @@ const baseInventory = [
     condition: "Sealed Pack",
     price: 999,
     stock: 1,
-    image: "assets/catalog/batman-barbie-2-pack.jpg",
+    image: "assets/catalog/batman-barbie-2-pack.webp",
     imageAlt: "Two sealed Hot Wheels Batman and Barbie themed packs",
     notes: "Two sealed themed Hot Wheels packs photographed from the actual available stock."
   }

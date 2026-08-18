@@ -16,18 +16,15 @@ const textFiles = [
 
 const assetFiles = [
   "assets/hero-shelf-fast.jpg",
-  "assets/collector-shelf-v2.png",
-  "assets/collector-shelf.png",
-  "assets/zenzo-logo-fast.jpg",
   "assets/zenzo-logo-mark.png",
-  "assets/zenzo-logo.png",
-  "assets/hot-wheels-f1-5-pack.jpeg",
-  "assets/hot-wheels-mystery-models.jpeg"
+  "assets/collection-hot-wheels.webp",
+  "assets/collection-figurines.webp",
+  "assets/collection-3d-prints.webp"
 ];
 
-for (const folder of ["assets/catalog", "assets/products", "assets/showcase"]) {
+for (const folder of ["assets/catalog", "assets/showcase"]) {
   for (const file of fs.readdirSync(path.join(root, folder))) {
-    if (folder === "assets/showcase" && !file.endsWith(".webp")) continue;
+    if (!file.endsWith(".webp")) continue;
     if (!file.includes("original")) assetFiles.push(`${folder}/${file}`);
   }
 }
@@ -68,8 +65,14 @@ const worker = `const textRoutes = ${JSON.stringify(textRoutes)};\n` +
 `const productData = ${JSON.stringify(productData)};\n` +
 `const binaryRoutes = ${JSON.stringify(binaryRoutes)};\n` +
 `
-function response(body, type, status = 200) {
-  return new Response(body, { status, headers: { "content-type": type } });
+function response(body, type, status = 200, cacheControl = "no-cache") {
+  return new Response(body, {
+    status,
+    headers: {
+      "cache-control": cacheControl,
+      "content-type": type
+    }
+  });
 }
 
 function json(data, status = 200) {
@@ -164,7 +167,12 @@ export default {
 
       if (binaryRoutes[pathname]) {
         const asset = binaryRoutes[pathname];
-        return response(decodeBase64(asset.body), asset.type);
+        return response(
+          decodeBase64(asset.body),
+          asset.type,
+          200,
+          "public, max-age=31536000, immutable"
+        );
       }
 
       if (textRoutes[pathname]) {
