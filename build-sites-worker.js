@@ -14,6 +14,20 @@ const textFiles = [
   "admin.js"
 ];
 
+const staticFiles = [
+  "assets/hero-shelf-fast.jpg",
+  "assets/zenzo-logo-mark.png",
+  "assets/collection-hot-wheels.webp",
+  "assets/collection-figurines.webp",
+  "assets/collection-3d-prints.webp"
+];
+
+for (const folder of ["assets/catalog", "assets/showcase"]) {
+  for (const file of fs.readdirSync(path.join(root, folder))) {
+    if (file.endsWith(".webp")) staticFiles.push(`${folder}/${file}`);
+  }
+}
+
 function mime(file) {
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
@@ -157,3 +171,9 @@ export default {
 `;
 
 fs.writeFileSync(path.join(root, "dist/server/index.js"), worker);
+
+for (const file of [...textFiles, ...staticFiles]) {
+  const destination = path.join(root, "dist", file);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.copyFileSync(path.join(root, file), destination);
+}
