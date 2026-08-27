@@ -193,6 +193,93 @@ const baseInventory = [
     bg: "#f8f7f3",
     glass: "#ffffff",
     notes: "Two sealed themed Hot Wheels packs photographed from the actual available stock."
+  },
+  {
+    id: "cake-slice-mini-keychain",
+    name: "Cake Slice Mini",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 299,
+    stock: 1,
+    image: "assets/accessories/cake-slice-mini.jpg",
+    gallery: ["assets/accessories/cake-slice-mini.jpg", "assets/accessories/cake-slice-mini-alt.jpg"],
+    imageAlt: "Handmade fuzzy cake slice keychain with cherry detail",
+    color: "#ff3b3b",
+    bg: "#080b10",
+    glass: "#35a8ff",
+    notes: "Handmade miniature cake slice keychain with layered detailing and a cherry accent. Each piece has its own small handmade variations."
+  },
+  {
+    id: "paw-keychain",
+    name: "Paw Keychain",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/paw-keychain.jpg",
+    imageAlt: "Handmade brown and pink fuzzy paw keychain",
+    color: "#ff78c8",
+    bg: "#080b10",
+    glass: "#35a8ff",
+    notes: "Handmade fuzzy paw keychain in brown and pink, finished with a silver key ring."
+  },
+  {
+    id: "flower-charm-keychain",
+    name: "Flower Charm",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/flower-charm.jpg",
+    gallery: ["assets/accessories/flower-charm.jpg", "assets/accessories/flower-charm-alt.jpg"],
+    imageAlt: "Handmade red and white fuzzy flower keychain",
+    color: "#ff3b3b",
+    bg: "#080b10",
+    glass: "#ffffff",
+    notes: "Handmade five-petal flower charm with red and white detailing, a pearl-style center, and silver key ring."
+  },
+  {
+    id: "cherry-charm-keychain",
+    name: "Cherry Charm",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/cherry-charm.jpg",
+    imageAlt: "Handmade fuzzy red cherry keychain with green stems",
+    color: "#e1262f",
+    bg: "#080b10",
+    glass: "#35a8ff",
+    notes: "Handmade cherry charm with two deep-red fuzzy cherries, green stems, and a silver key ring."
+  },
+  {
+    id: "fries-keychain",
+    name: "Fries Keychain",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 299,
+    stock: 1,
+    image: "assets/accessories/fries-keychain.jpg",
+    imageAlt: "Handmade red and yellow fuzzy fries keychain",
+    color: "#ff3b3b",
+    bg: "#080b10",
+    glass: "#f8d432",
+    notes: "Handmade red-and-yellow fries keychain with a playful fuzzy finish and silver key ring."
   }
 ];
 
@@ -209,6 +296,7 @@ let inventory = [...baseInventory, ...loadAdminProducts()];
 const state = {
   query: "",
   collection: "all",
+  subcategory: "all",
   sort: "featured",
   cart: JSON.parse(localStorage.getItem("dieCastGarageCart") || "[]")
 };
@@ -225,6 +313,7 @@ const cartCount = document.querySelector("#cartCount");
 const cartItems = document.querySelector("#cartItems");
 const cartSubtotal = document.querySelector("#cartSubtotal");
 const checkoutLink = document.querySelector("#checkoutLink");
+const subcategoryBar = document.querySelector("#subcategoryBar");
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -232,7 +321,7 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
 });
 
-const assetVersion = "zenzo-race-theme-36";
+const assetVersion = "zenzo-race-theme-38";
 
 const showcaseImages = {
   "admin-f1-stand-1783480383065": "assets/showcase/admin-f1-stand.webp",
@@ -269,8 +358,9 @@ function filteredInventory() {
   const query = state.query.trim().toLowerCase();
   const cars = inventory.filter((car) => {
     const matchesCollection = state.collection === "all" || productCollection(car) === state.collection;
-    const haystack = `${car.name} ${productCollection(car)} ${car.series} ${car.year} ${car.condition}`.toLowerCase();
-    return matchesCollection && haystack.includes(query);
+    const matchesSubcategory = state.subcategory === "all" || car.subcategory === state.subcategory;
+    const haystack = `${car.name} ${productCollection(car)} ${car.subcategory || ""} ${car.series} ${car.year} ${car.condition}`.toLowerCase();
+    return matchesCollection && matchesSubcategory && haystack.includes(query);
   });
 
   return cars.sort((a, b) => {
@@ -294,7 +384,8 @@ function carMarkup(car) {
   const displayImage = showcaseImage || car.image;
   const imageSrc = displayImage && displayImage.startsWith("data:") ? displayImage : `${displayImage}?v=${assetVersion}`;
   const detailsHref = `product.html?id=${encodeURIComponent(car.id)}`;
-  const imageClass = showcaseImage ? "product-photo product-photo--showcase" : "product-photo";
+  const isStudioImage = displayImage?.includes("assets/accessories/");
+  const imageClass = showcaseImage || isStudioImage ? "product-photo product-photo--showcase" : "product-photo";
   const imageAlt = showcaseImage ? `Unboxed showcase view of ${car.name}` : car.imageAlt || car.name;
   const media = displayImage ? `<img class="${imageClass}" src="${imageSrc}" alt="${imageAlt}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;"><span class="photo-fallback" hidden>Photo unavailable</span>` : `
         <div class="toy-car" aria-hidden="true">
@@ -322,7 +413,7 @@ function carMarkup(car) {
         </div>
         <p class="meta">
           <span>${productCollection(car)}</span>
-          <span>${car.series}</span>
+          <span>${car.subcategory || car.series}</span>
           <span>${car.year}</span>
           <span>${stockLabel}</span>
         </p>
@@ -337,6 +428,7 @@ function renderProducts() {
   const cars = filteredInventory();
   productGrid.innerHTML = cars.map(carMarkup).join("");
   emptyState.hidden = cars.length > 0;
+  if (subcategoryBar) subcategoryBar.hidden = state.collection !== "Accessories";
 }
 
 function renderCart() {
@@ -411,11 +503,22 @@ cartItems.addEventListener("click", (event) => {
 document.querySelectorAll("[data-collection]").forEach((button) => {
   button.addEventListener("click", () => {
     state.collection = button.dataset.collection;
+    state.subcategory = state.collection === "Accessories" ? "Keychains" : "all";
     document.querySelectorAll("[data-collection]").forEach((card) => {
       card.classList.toggle("is-active", card.dataset.collection === state.collection);
     });
     renderProducts();
     document.querySelector("#catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
+document.querySelectorAll("[data-subcategory]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.subcategory = button.dataset.subcategory;
+    document.querySelectorAll("[data-subcategory]").forEach((filter) => {
+      filter.classList.toggle("is-active", filter.dataset.subcategory === state.subcategory);
+    });
+    renderProducts();
   });
 });
 

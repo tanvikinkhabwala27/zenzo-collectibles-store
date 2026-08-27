@@ -154,6 +154,78 @@ const baseInventory = [
     image: "assets/catalog/batman-barbie-2-pack.webp",
     imageAlt: "Two sealed Hot Wheels Batman and Barbie themed packs",
     notes: "Two sealed themed Hot Wheels packs photographed from the actual available stock."
+  },
+  {
+    id: "cake-slice-mini-keychain",
+    name: "Cake Slice Mini",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 299,
+    stock: 1,
+    image: "assets/accessories/cake-slice-mini.jpg",
+    gallery: ["assets/accessories/cake-slice-mini.jpg", "assets/accessories/cake-slice-mini-alt.jpg"],
+    imageAlt: "Handmade fuzzy cake slice keychain with cherry detail",
+    notes: "Handmade miniature cake slice keychain with layered detailing and a cherry accent. Each piece has its own small handmade variations."
+  },
+  {
+    id: "paw-keychain",
+    name: "Paw Keychain",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/paw-keychain.jpg",
+    imageAlt: "Handmade brown and pink fuzzy paw keychain",
+    notes: "Handmade fuzzy paw keychain in brown and pink, finished with a silver key ring."
+  },
+  {
+    id: "flower-charm-keychain",
+    name: "Flower Charm",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/flower-charm.jpg",
+    gallery: ["assets/accessories/flower-charm.jpg", "assets/accessories/flower-charm-alt.jpg"],
+    imageAlt: "Handmade red and white fuzzy flower keychain",
+    notes: "Handmade five-petal flower charm with red and white detailing, a pearl-style center, and silver key ring."
+  },
+  {
+    id: "cherry-charm-keychain",
+    name: "Cherry Charm",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 249,
+    stock: 1,
+    image: "assets/accessories/cherry-charm.jpg",
+    imageAlt: "Handmade fuzzy red cherry keychain with green stems",
+    notes: "Handmade cherry charm with two deep-red fuzzy cherries, green stems, and a silver key ring."
+  },
+  {
+    id: "fries-keychain",
+    name: "Fries Keychain",
+    collection: "Accessories",
+    subcategory: "Keychains",
+    series: "Handmade Keychains",
+    year: 2026,
+    condition: "Handmade",
+    price: 299,
+    stock: 1,
+    image: "assets/accessories/fries-keychain.jpg",
+    imageAlt: "Handmade red and yellow fuzzy fries keychain",
+    notes: "Handmade red-and-yellow fries keychain with a playful fuzzy finish and silver key ring."
   }
 ];
 
@@ -169,12 +241,13 @@ let inventory = [...baseInventory, ...loadAdminProducts()];
 const productDetail = document.querySelector("#productDetail");
 const params = new URLSearchParams(window.location.search);
 let product = inventory.find((item) => item.id === params.get("id"));
+let activeImageIndex = 0;
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0
 });
-const assetVersion = "zenzo-race-theme-33";
+const assetVersion = "zenzo-race-theme-38";
 
 function productCollection(item) {
   return item.collection || "Hot Wheels";
@@ -222,16 +295,22 @@ function renderProduct() {
   const remaining = product.stock - inCart;
   const stockLabel = product.stock > 1 ? `${remaining} of ${product.stock} left` : remaining > 0 ? "1 available" : "Sold out";
   const buttonText = remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "Sold out";
-  const imageSrc = product.image && product.image.startsWith("data:") ? product.image : `${product.image}?v=${assetVersion}`;
+  const gallery = product.gallery?.length ? product.gallery : [product.image];
+  if (activeImageIndex >= gallery.length) activeImageIndex = 0;
+  const activeImage = gallery[activeImageIndex];
+  const imageSrc = activeImage && activeImage.startsWith("data:") ? activeImage : `${activeImage}?v=${assetVersion}`;
   document.title = `${product.name} | Zenzo`;
 
   productDetail.innerHTML = `
     <div class="product-detail__media">
       <img src="${imageSrc}" alt="${product.imageAlt || product.name}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;">
       <span class="photo-fallback" hidden>Photo unavailable</span>
+      ${gallery.length > 1 ? `<div class="product-gallery" aria-label="More product photos">
+        ${gallery.map((image, index) => `<button class="product-gallery__thumb ${index === activeImageIndex ? "is-active" : ""}" type="button" data-gallery-index="${index}" aria-label="View photo ${index + 1}"><img src="${image}?v=${assetVersion}" alt=""></button>`).join("")}
+      </div>` : ""}
     </div>
     <div class="product-detail__info">
-      <p class="eyebrow">${productCollection(product)}</p>
+      <p class="eyebrow">${productCollection(product)}${product.subcategory ? ` / ${product.subcategory}` : ""}</p>
       <h1>${product.name}</h1>
       <strong class="product-detail__price">${money.format(product.price)}</strong>
       <p class="meta">
@@ -264,6 +343,12 @@ async function init() {
   }
   renderProduct();
   productDetail.addEventListener("click", (event) => {
+    const galleryButton = event.target.closest("[data-gallery-index]");
+    if (galleryButton) {
+      activeImageIndex = Number(galleryButton.dataset.galleryIndex);
+      renderProduct();
+      return;
+    }
     const button = event.target.closest("#detailAddButton");
     if (!button) return;
     const cart = getCart();

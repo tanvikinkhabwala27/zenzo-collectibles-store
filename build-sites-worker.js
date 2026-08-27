@@ -28,6 +28,10 @@ for (const folder of ["assets/catalog", "assets/showcase"]) {
   }
 }
 
+for (const file of fs.readdirSync(path.join(root, "assets/accessories"))) {
+  if (/\.(webp|png|jpe?g)$/i.test(file)) staticFiles.push(`assets/accessories/${file}`);
+}
+
 function mime(file) {
   if (file.endsWith(".css")) return "text/css; charset=utf-8";
   if (file.endsWith(".html")) return "text/html; charset=utf-8";
