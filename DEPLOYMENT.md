@@ -1,106 +1,79 @@
 # Zenzo Production Deployment
 
-## What Is Ready
+## Production Platform
 
-- Node production server: `server.js`
-- Static storefront served by the same server
-- Server-backed product inventory in `data/products.json`
-- Server-backed orders in `data/orders.json`
-- Admin login via HttpOnly session cookie
-- Razorpay order creation endpoint
-- Razorpay webhook endpoint for `order.paid`
-- Checkout no longer exposes the raw UPI ID
+Zenzo deploys from the `main` branch on GitHub to Vercel. Vercel serves the
+storefront, runs the API routes, provisions HTTPS, and publishes the custom
+domain.
 
-## Recommended Hosting
+The production data store is a private Vercel Blob store:
 
-Use Render for the first stable client share. This app is a Node web service, not just static HTML, because admin login, product edits, orders, and Razorpay webhooks run through `server.js`.
+- `zenzo-data/products.json` stores admin-managed inventory and product images.
+- `zenzo-data/orders.json` stores customer orders and payment status.
+- The bundled `data/products.json` file seeds the private store on its first read.
 
-The repo includes `render.yaml`, which creates:
+Local development continues to use JSON files on disk and does not require
+Vercel credentials.
 
-- A public Node web service
-- A Singapore region deployment for better India latency
-- A 1 GB persistent disk mounted at `/var/data`
-- `DATA_DIR=/var/data` so product/order changes survive redeploys
-- Secret placeholders for the admin password and Razorpay keys
+## Vercel Project Setup
 
-Render will provide a stable URL like:
+1. Import `tanvikinkhabwala27/zenzo-collectibles-store` in Vercel.
+2. Keep the root directory at the repository root.
+3. Use the `Other` framework preset. No build command or output directory is
+   required.
+4. In the project Storage tab, create a private Blob store and connect it to
+   Production, Preview, and Development. Vercel supplies
+   `BLOB_READ_WRITE_TOKEN` automatically.
+5. Add the production environment variables below.
+6. Deploy `main` and test the generated `vercel.app` URL.
+7. Add `zenzo.org.in` and `www.zenzo.org.in` in Project Settings > Domains.
 
-```text
-https://zenzo-store.onrender.com
-```
-
-You can add a custom domain later.
-
-## Required Production Accounts
-
-1. Hosting provider for a Node app: Render is recommended for this version.
-2. Razorpay merchant account with live API keys.
-3. Domain name for the storefront.
-4. Business email access for `zenzo.org@gmail.com`.
+Every later push to `main` automatically creates a production deployment.
 
 ## Environment Variables
 
-Set these on the hosting provider:
+Set these for Production, Preview, and Development unless a value is intended
+only for live payments:
 
-```bash
+```text
 ADMIN_EMAIL=zenzo.org@gmail.com
 ADMIN_PASSWORD=use-a-new-strong-password
 SESSION_SECRET=use-a-long-random-secret
 RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxx
 RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxx
 RAZORPAY_WEBHOOK_SECRET=use-the-secret-from-razorpay-webhook-settings
-DATA_DIR=/var/data
 ```
 
-Do not set `PORT` manually on Render. Render provides it automatically.
+The Blob store connection adds `BLOB_READ_WRITE_TOKEN`; do not copy that token
+into GitHub or source files.
 
-## Run Locally
+## Razorpay Webhook
 
-```bash
-node server.js
-```
-
-Then open:
+After the custom domain is active, configure Razorpay to send `order.paid`
+events to:
 
 ```text
-http://127.0.0.1:8092
+https://zenzo.org.in/api/webhooks/razorpay
 ```
 
-## Razorpay Setup
+Use the same signing secret for the Vercel `RAZORPAY_WEBHOOK_SECRET` variable.
 
-1. Create a Razorpay merchant account.
-2. Complete KYC and enable live payments.
-3. Generate live API keys.
-4. Add the keys to the hosting provider environment variables.
-5. Add a webhook in Razorpay pointing to:
-
-```text
-https://YOUR_DOMAIN/api/webhooks/razorpay
-```
-
-6. Subscribe to `order.paid`.
-7. Use the same webhook secret in `RAZORPAY_WEBHOOK_SECRET`.
-
-## Render Deploy Steps
-
-1. Push `outputs/hotwheels-store` to a GitHub repository.
-2. In Render, create a new Blueprint or Web Service from that repository.
-3. If using the blueprint, Render reads `render.yaml`.
-4. Set the secret values that are marked `sync: false`.
-5. Deploy.
-6. Open the `onrender.com` URL and test:
-   - Shop page
-   - Product details
-   - Checkout
-   - Admin login
-   - Adding a product
-
-## Manual Deploy Command
-
-The production start command is:
+## Local Development
 
 ```bash
+npm install
 npm start
 ```
 
-No build command is needed.
+Open `http://127.0.0.1:8092`.
+
+## Production Checks
+
+Before switching DNS, verify on the generated Vercel URL:
+
+- Storefront products and collection filters load.
+- Product details and cart navigation work.
+- Checkout creates an order.
+- Razorpay opens when live keys are configured.
+- Admin login succeeds.
+- An admin-added test product remains after a redeploy.

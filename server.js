@@ -8,8 +8,11 @@ const bundledDataDir = path.join(rootDir, "data");
 const dataDir = process.env.DATA_DIR || bundledDataDir;
 const productsFile = path.join(dataDir, "products.json");
 const ordersFile = path.join(dataDir, "orders.json");
+const isVercel = Boolean(process.env.VERCEL);
+const usesBlobStorage = isVercel && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 const port = Number(process.env.PORT || 8092);
 const host = process.env.HOST || "0.0.0.0";
+let blobClientPromise;
 
 const config = {
   adminEmail: (process.env.ADMIN_EMAIL || "zenzo.org@gmail.com").toLowerCase(),
@@ -70,7 +73,7 @@ function verifySession(req) {
   }
 }
 
-async function readJson(file, fallback) {
+async function readFileJson(file, fallback) {
   try {
     return JSON.parse(await fs.readFile(file, "utf8"));
   } catch {
@@ -78,9 +81,70 @@ async function readJson(file, fallback) {
   }
 }
 
-async function writeJson(file, value) {
+async function writeFileJson(file, value) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(value, null, 2));
+}
+
+function blobPath(file) {
+  return `zenzo-data/${path.basename(file)}`;
+}
+
+function getBlobClient() {
+  blobClientPromise ||= import("@vercel/blob");
+  return blobClientPromise;
+}
+
+async function readBlobJson(file, fallback) {
+  const { get, put } = await getBlobClient();
+  const pathname = blobPath(file);
+  const result = await get(pathname, { access: "private" });
+  if (result?.statusCode === 200) {
+    return JSON.parse(await new Response(result.stream).text());
+  }
+
+  const bundled = await readFileJson(path.join(bundledDataDir, path.basename(file)), fallback);
+  try {
+    await put(pathname, JSON.stringify(bundled, null, 2), {
+      access: "private",
+      addRandomSuffix: false,
+      cacheControlMaxAge: 60,
+      contentType: "application/json"
+    });
+    return bundled;
+  } catch {
+    const seeded = await get(pathname, { access: "private" });
+    if (seeded?.statusCode === 200) {
+      return JSON.parse(await new Response(seeded.stream).text());
+    }
+    throw new Error("Unable to initialize persistent storage.");
+  }
+}
+
+async function readJson(file, fallback) {
+  if (usesBlobStorage) return readBlobJson(file, fallback);
+  const source = isVercel ? path.join(bundledDataDir, path.basename(file)) : file;
+  return readFileJson(source, fallback);
+}
+
+async function writeJson(file, value) {
+  if (usesBlobStorage) {
+    const { put } = await getBlobClient();
+    await put(blobPath(file), JSON.stringify(value, null, 2), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      cacheControlMaxAge: 60,
+      contentType: "application/json"
+    });
+    return;
+  }
+  if (isVercel) {
+    const error = new Error("Persistent storage is not configured yet.");
+    error.statusCode = 503;
+    throw error;
+  }
+  await writeFileJson(file, value);
 }
 
 async function copyIfMissing(source, destination, fallback) {
@@ -97,6 +161,7 @@ async function copyIfMissing(source, destination, fallback) {
 }
 
 async function seedDataFiles() {
+  if (isVercel) return;
   await copyIfMissing(path.join(bundledDataDir, "products.json"), productsFile, []);
   await copyIfMissing(path.join(bundledDataDir, "orders.json"), ordersFile, []);
 }
@@ -170,6 +235,9 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/login") {
+    if (!config.adminPassword) {
+      return send(res, 503, { error: "Admin login is not configured." });
+    }
     const body = await readBody(req);
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
@@ -177,7 +245,7 @@ async function handleApi(req, res, url) {
       return send(res, 401, { error: "Incorrect email or password." });
     }
     return send(res, 200, { ok: true }, {
-      "set-cookie": `zenzo_session=${encodeURIComponent(makeSession(email))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`
+      "set-cookie": `zenzo_session=${encodeURIComponent(makeSession(email))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=28800${isVercel ? "; Secure" : ""}`
     });
   }
 
@@ -296,7 +364,7 @@ async function serveStatic(req, res, url) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname.startsWith("/api/")) {
@@ -305,15 +373,20 @@ const server = http.createServer(async (req, res) => {
       await serveStatic(req, res, url);
     }
   } catch (error) {
-    send(res, 500, { error: error.message || "Server error." });
+    send(res, Number(error.statusCode) || 500, { error: error.message || "Server error." });
   }
-});
+}
 
-seedDataFiles().then(() => {
-  server.listen(port, host, () => {
-    console.log(`Zenzo production server running on http://${host}:${port}`);
+module.exports = handleRequest;
+
+if (require.main === module) {
+  const server = http.createServer(handleRequest);
+  seedDataFiles().then(() => {
+    server.listen(port, host, () => {
+      console.log(`Zenzo production server running on http://${host}:${port}`);
+    });
+  }).catch((error) => {
+    console.error("Unable to start Zenzo server:", error);
+    process.exit(1);
   });
-}).catch((error) => {
-  console.error("Unable to start Zenzo server:", error);
-  process.exit(1);
-});
+}

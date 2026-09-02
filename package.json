@@ -6,6 +6,9 @@
     "start": "node server.js",
     "check": "node --check server.js && node --check app.js && node --check checkout.js && node --check admin.js && node --check product.js"
   },
+  "dependencies": {
+    "@vercel/blob": "^2.3.0"
+  },
   "engines": {
     "node": ">=20"
   }
