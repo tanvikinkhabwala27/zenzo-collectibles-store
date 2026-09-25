@@ -23,31 +23,31 @@
             <form class="form-grid" id="checkoutForm">
               <label class="field">
                 Full name
-                <input name="name" autocomplete="name" required>
+                <input name="name" autocomplete="name" maxlength="100" required>
               </label>
               <label class="field">
                 Email address
-                <input name="email" type="email" autocomplete="email" required>
+                <input name="email" type="email" autocomplete="email" maxlength="254" required>
               </label>
               <label class="field">
                 Mobile number
-                <input name="phone" inputmode="tel" autocomplete="tel" required>
+                <input name="phone" type="tel" inputmode="tel" autocomplete="tel" pattern="[0-9+\-\s]{8,20}" maxlength="20" required>
               </label>
               <label class="field field--full">
                 Delivery address
-                <textarea name="address" autocomplete="street-address" required></textarea>
+                <textarea name="address" autocomplete="street-address" maxlength="500" required></textarea>
               </label>
               <label class="field">
                 City
-                <input name="city" autocomplete="address-level2" required>
+                <input name="city" autocomplete="address-level2" maxlength="100" required>
               </label>
               <label class="field">
                 State
-                <input name="state" autocomplete="address-level1" required>
+                <input name="state" autocomplete="address-level1" maxlength="100" required>
               </label>
               <label class="field">
                 PIN code
-                <input name="pin" inputmode="numeric" autocomplete="postal-code" required>
+                <input name="pin" inputmode="numeric" autocomplete="postal-code" pattern="[1-9][0-9]{5}" maxlength="6" title="6-digit PIN code" required>
               </label>
               <div class="upi-panel field--full" aria-label="UPI payment instructions">
                 <strong>Secure UPI checkout</strong>
@@ -66,13 +66,13 @@
               <strong id="checkoutSubtotal">₹0</strong>
             </div>
             <button class="place-order" form="checkoutForm" type="submit">Pay securely</button>
-            <p class="checkout-note" id="checkoutNote">UPI payment is handled through the payment gateway. The UPI ID is not shown to buyers.</p>
+            <p class="checkout-note" id="checkoutNote" role="status" aria-live="polite"></p>
           </div>
         </aside>
       </div>
     </main>
 
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <script src="checkout.js?v=zenzo-race-theme-28"></script>
+    <script src="checkout.js?v=zenzo-race-theme-29"></script>
   </body>
 </html>

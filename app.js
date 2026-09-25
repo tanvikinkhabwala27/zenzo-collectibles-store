@@ -444,6 +444,7 @@ function renderCart() {
   } else {
     cartItems.innerHTML = [...new Set(state.cart)].map((id) => {
       const car = inventory.find((item) => item.id === id);
+      if (!car) return "";
       const quantity = cartQuantity(id);
       return `
         <div class="cart-item">
@@ -543,6 +544,7 @@ document.addEventListener("keydown", (event) => {
 
 async function init() {
   await loadProductsFromApi();
+  state.cart = state.cart.filter((id) => inventory.some((item) => item.id === id));
   renderProducts();
   renderCart();
 }

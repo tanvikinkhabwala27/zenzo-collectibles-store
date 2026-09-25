@@ -68,6 +68,7 @@ function openRazorpay(order, formData) {
     amount: order.amount,
     currency: order.currency,
     name: "Zenzo",
+    image: new URL("assets/zenzo-logo-square.png", window.location.href).href,
     description: `Order ${order.orderId}`,
     order_id: order.razorpayOrderId,
     prefill: {
@@ -119,6 +120,7 @@ function openRazorpay(order, formData) {
     checkoutNote.textContent = response?.error?.description || "Payment failed. Please try again.";
   });
   razorpay.open();
+  checkoutNote.textContent = "";
 }
 
 form.addEventListener("submit", async (event) => {

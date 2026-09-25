@@ -44,6 +44,9 @@ RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxx
 RAZORPAY_WEBHOOK_SECRET=use-the-secret-from-razorpay-webhook-settings
 ```
 
+`ADMIN_PASSWORD` and `SESSION_SECRET` are both required in production; admin
+login stays disabled until both are set.
+
 The Blob store connection adds `BLOB_READ_WRITE_TOKEN`; do not copy that token
 into GitHub or source files.
 
