@@ -78,16 +78,45 @@ function openRazorpay(order, formData) {
     notes: {
       order_id: order.orderId
     },
+    config: {
+      display: {
+        blocks: {
+          upi: {
+            name: "Pay using UPI",
+            instruments: [{ method: "upi" }]
+          }
+        },
+        sequence: ["block.upi"],
+        preferences: { show_default_blocks: true }
+      }
+    },
     theme: {
       color: "#242424"
     },
-    handler() {
-      localStorage.removeItem("dieCastGarageCart");
-      checkoutNote.textContent = "Payment received. Zenzo will confirm and dispatch your order.";
-      form.reset();
-      orderList.innerHTML = '<p class="empty-state">Payment received. Your cart is now clear.</p>';
-      subtotalEl.textContent = money.format(0);
+    modal: {
+      ondismiss() {
+        checkoutNote.textContent = "Payment window closed. Your cart is saved, so you can try again.";
+      }
+    },
+    async handler(response) {
+      checkoutNote.textContent = "Confirming your payment...";
+      try {
+        await api("/api/orders/verify", {
+          method: "POST",
+          body: JSON.stringify(response)
+        });
+        localStorage.removeItem("dieCastGarageCart");
+        checkoutNote.textContent = `Payment confirmed for order ${order.orderId}. Zenzo will dispatch your order soon.`;
+        form.reset();
+        orderList.innerHTML = '<p class="empty-state">Payment received. Your cart is now clear.</p>';
+        subtotalEl.textContent = money.format(0);
+      } catch {
+        checkoutNote.textContent = `Payment received but confirmation is still pending for order ${order.orderId}. Please keep your UPI reference; Zenzo will confirm shortly.`;
+      }
     }
+  });
+  razorpay.on("payment.failed", (response) => {
+    checkoutNote.textContent = response?.error?.description || "Payment failed. Please try again.";
   });
   razorpay.open();
 }

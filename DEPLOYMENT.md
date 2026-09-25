@@ -47,16 +47,40 @@ RAZORPAY_WEBHOOK_SECRET=use-the-secret-from-razorpay-webhook-settings
 The Blob store connection adds `BLOB_READ_WRITE_TOKEN`; do not copy that token
 into GitHub or source files.
 
-## Razorpay Webhook
+## UPI Payments (Razorpay)
 
-After the custom domain is active, configure Razorpay to send `order.paid`
-events to:
+UPI is collected through Razorpay Checkout; the store never shows a UPI ID.
+The checkout opens with UPI listed first, and cards/netbanking stay available
+below it.
+
+1. Create a Razorpay account and complete KYC. Live keys and UPI are only
+   enabled after activation.
+2. In Razorpay Dashboard > Account & Settings > Payment methods, confirm UPI
+   is enabled.
+3. In Dashboard > Account & Settings > API Keys, generate a key pair and set
+   `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in Vercel. Use `rzp_test_`
+   keys on Preview to test first.
+4. Redeploy so the new variables take effect.
+
+An order is marked `paid` in two independent ways:
+
+- The browser sends the Razorpay payment signature to `/api/orders/verify`,
+  which checks it with `RAZORPAY_KEY_SECRET` right after the buyer pays.
+- Razorpay's webhook confirms it server-to-server, which covers buyers who
+  close the tab before the page returns.
+
+### Webhook
+
+After the custom domain is active, add a webhook in Razorpay Dashboard >
+Account & Settings > Webhooks for the `order.paid` and `payment.captured`
+events, pointing to:
 
 ```text
 https://zenzo.org.in/api/webhooks/razorpay
 ```
 
 Use the same signing secret for the Vercel `RAZORPAY_WEBHOOK_SECRET` variable.
+The webhook rejects every request until that secret is set.
 
 ## Local Development
 
@@ -74,6 +98,7 @@ Before switching DNS, verify on the generated Vercel URL:
 - Storefront products and collection filters load.
 - Product details and cart navigation work.
 - Checkout creates an order.
-- Razorpay opens when live keys are configured.
+- Razorpay opens with UPI first when keys are configured.
+- A test-mode UPI payment (`success@razorpay`) marks the order `paid`.
 - Admin login succeeds.
 - An admin-added test product remains after a redeploy.

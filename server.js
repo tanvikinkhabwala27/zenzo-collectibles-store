@@ -229,6 +229,25 @@ async function createRazorpayOrder(order) {
   return data;
 }
 
+function safeEqualHex(a, b) {
+  const left = Buffer.from(String(a || ""), "utf8");
+  const right = Buffer.from(String(b || ""), "utf8");
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+async function markOrderPaid(razorpayOrderId, paymentId) {
+  const orders = await readJson(ordersFile, []);
+  const order = orders.find((item) => item.razorpayOrderId === razorpayOrderId);
+  if (!order) return null;
+  if (order.status !== "paid") {
+    order.status = "paid";
+    order.paidAt = new Date().toISOString();
+    if (paymentId) order.razorpayPaymentId = paymentId;
+    await writeJson(ordersFile, orders);
+  }
+  return order;
+}
+
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/products") {
     return send(res, 200, await readJson(productsFile, []));
@@ -317,25 +336,41 @@ async function handleApi(req, res, url) {
     });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/orders/verify") {
+    if (!config.razorpayKeySecret) {
+      return send(res, 503, { error: "Payment gateway is not configured." });
+    }
+    const body = await readBody(req);
+    const razorpayOrderId = String(body.razorpay_order_id || "");
+    const paymentId = String(body.razorpay_payment_id || "");
+    const expected = crypto.createHmac("sha256", config.razorpayKeySecret)
+      .update(`${razorpayOrderId}|${paymentId}`)
+      .digest("hex");
+    if (!razorpayOrderId || !paymentId || !safeEqualHex(body.razorpay_signature, expected)) {
+      return send(res, 400, { error: "Payment could not be verified." });
+    }
+    const order = await markOrderPaid(razorpayOrderId, paymentId);
+    if (!order) return send(res, 404, { error: "Order not found." });
+    return send(res, 200, { ok: true, orderId: order.id, status: order.status });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/webhooks/razorpay") {
+    if (!config.razorpayWebhookSecret) {
+      return send(res, 503, { error: "Webhook secret is not configured." });
+    }
     const rawChunks = [];
     for await (const chunk of req) rawChunks.push(chunk);
     const rawBody = Buffer.concat(rawChunks);
     const signature = req.headers["x-razorpay-signature"];
     const expected = crypto.createHmac("sha256", config.razorpayWebhookSecret).update(rawBody).digest("hex");
-    if (config.razorpayWebhookSecret && signature !== expected) {
+    if (!safeEqualHex(signature, expected)) {
       return send(res, 401, { error: "Invalid webhook signature." });
     }
     const event = JSON.parse(rawBody.toString("utf8"));
-    const razorpayOrderId = event?.payload?.payment?.entity?.order_id || event?.payload?.order?.entity?.id;
-    if (razorpayOrderId && event.event === "order.paid") {
-      const orders = await readJson(ordersFile, []);
-      const order = orders.find((item) => item.razorpayOrderId === razorpayOrderId);
-      if (order) {
-        order.status = "paid";
-        order.paidAt = new Date().toISOString();
-        await writeJson(ordersFile, orders);
-      }
+    const payment = event?.payload?.payment?.entity;
+    const razorpayOrderId = payment?.order_id || event?.payload?.order?.entity?.id;
+    if (razorpayOrderId && (event.event === "order.paid" || event.event === "payment.captured")) {
+      await markOrderPaid(razorpayOrderId, payment?.id);
     }
     return send(res, 200, { ok: true });
   }
