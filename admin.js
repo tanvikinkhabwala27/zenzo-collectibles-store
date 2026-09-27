@@ -6,7 +6,19 @@ const productForm = document.querySelector("#productForm");
 const productsList = document.querySelector("#adminProducts");
 const logoutButton = document.querySelector("#logoutButton");
 const ordersList = document.querySelector("#adminOrders");
-const orderFilter = document.querySelector("#orderFilter");
+const orderFilters = document.querySelector("#orderFilters");
+const productsMessage = document.querySelector("#productsMessage");
+const tabs = ["dashboard", "orders", "products", "add"];
+const orderFilterLabels = [
+  ["paid", "Pending dispatch"],
+  ["dispatched", "Dispatched"],
+  ["delivered", "Completed"],
+  ["payment_pending", "Awaiting payment"],
+  ["cancelled", "Cancelled"],
+  ["all", "All"]
+];
+let orderFilter = "paid";
+let currentTab = "dashboard";
 const statusLabels = {
   created: "Not paid",
   payment_pending: "Awaiting payment",
@@ -48,8 +60,119 @@ async function api(path, options = {}) {
 function showDashboard() {
   loginPanel.hidden = true;
   dashboard.hidden = false;
-  renderProducts();
-  renderOrders();
+  const requested = window.location.hash.slice(1);
+  showTab(tabs.includes(requested) ? requested : "dashboard");
+}
+
+function showTab(name) {
+  currentTab = name;
+  for (const tab of document.querySelectorAll(".admin-tab")) {
+    const active = tab.dataset.tab === name;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll("[data-panel]")) {
+    panel.hidden = panel.dataset.panel !== name;
+  }
+  if (window.location.hash.slice(1) !== name) history.replaceState(null, "", `#${name}`);
+  if (name === "dashboard") renderDashboard();
+  if (name === "orders") renderOrders();
+  if (name === "products") {
+    productsMessage.textContent = "";
+    renderProducts();
+  }
+}
+
+function isPaidOrder(order) {
+  return Boolean(order.paidAt) && order.status !== "cancelled";
+}
+
+function countByStatus(orders) {
+  const counts = { all: orders.length };
+  for (const order of orders) counts[order.status] = (counts[order.status] || 0) + 1;
+  return counts;
+}
+
+function updateOrdersBadge(orders) {
+  const badge = document.querySelector("#ordersTabCount");
+  const waiting = orders.filter((order) => order.status === "paid").length;
+  badge.hidden = waiting === 0;
+  badge.textContent = waiting;
+  badge.setAttribute("aria-label", `${waiting} waiting to be dispatched`);
+}
+
+function statTile({ label, value, note = "", go, filter, status }) {
+  const tag = go ? "button" : "div";
+  const attributes = go ? ` type="button" data-go="${go}"${filter ? ` data-filter="${filter}"` : ""}` : "";
+  return `
+    <${tag} class="admin-stat${status ? ` admin-stat--${status}` : ""}"${attributes}>
+      <span class="admin-stat__label">${label}</span>
+      <span class="admin-stat__value">${value}</span>
+      ${note ? `<span class="admin-stat__note">${note}</span>` : ""}
+    </${tag}>
+  `;
+}
+
+async function renderDashboard() {
+  const stats = document.querySelector("#adminStats");
+  let orders;
+  let products;
+  try {
+    [orders, products] = await Promise.all([api("/api/admin/orders"), api("/api/products")]);
+  } catch (error) {
+    stats.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  updateOrdersBadge(orders);
+  const counts = countByStatus(orders);
+  const paid = orders.filter(isPaidOrder);
+  const revenue = paid.reduce((sum, order) => sum + (order.total || 0), 0);
+  const outOfStock = products.filter((product) => !product.stock);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthRevenue = paid
+    .filter((order) => String(order.paidAt).startsWith(thisMonth))
+    .reduce((sum, order) => sum + (order.total || 0), 0);
+
+  document.querySelector("#statRevenue").textContent = money.format(revenue);
+  document.querySelector("#statRevenueNote").textContent = paid.length
+    ? `${paid.length} paid ${paid.length === 1 ? "order" : "orders"} · ${money.format(monthRevenue)} this month`
+    : "No paid orders yet.";
+
+  stats.innerHTML = [
+    statTile({ label: "Orders", value: paid.length, note: "Paid, all time", go: "orders", filter: "all" }),
+    statTile({
+      label: "Pending dispatch",
+      value: counts.paid || 0,
+      note: counts.paid ? "Ready to pack and send" : "All caught up",
+      go: "orders",
+      filter: "paid",
+      status: counts.paid ? "attention" : ""
+    }),
+    statTile({ label: "Dispatched", value: counts.dispatched || 0, note: "On the way", go: "orders", filter: "dispatched" }),
+    statTile({ label: "Completed", value: counts.delivered || 0, note: "Delivered", go: "orders", filter: "delivered" }),
+    statTile({ label: "Awaiting payment", value: counts.payment_pending || 0, note: "Checkout started, not paid", go: "orders", filter: "payment_pending" }),
+    statTile({
+      label: "Products",
+      value: products.length,
+      note: outOfStock.length ? `${outOfStock.length} out of stock` : "All in stock",
+      go: "products",
+      status: outOfStock.length ? "attention" : ""
+    })
+  ].join("");
+
+  const waiting = orders.filter((order) => order.status === "paid").slice(0, 5);
+  document.querySelector("#attentionOrders").innerHTML = waiting.length
+    ? waiting.map(orderMarkup).join("")
+    : '<p class="empty-state">Nothing waiting. New paid orders appear here.</p>';
+  document.querySelector("#stockList").innerHTML = outOfStock.length
+    ? outOfStock.map((product) => `
+      <div class="admin-stock-item">
+        <span>${escapeHtml(product.name)}</span>
+        <span class="admin-stat__note">${escapeHtml(product.collection || "Hot Wheels")}</span>
+      </div>
+    `).join("")
+    : '<p class="empty-state">Every product is in stock.</p>';
 }
 
 function orderActions(order) {
@@ -94,15 +217,25 @@ async function renderOrders() {
     ordersList.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
     return;
   }
-  const filter = orderFilter.value;
-  const visible = orders.filter((order) => {
-    if (filter === "todo") return order.status === "paid";
-    if (filter === "payment_pending") return order.status === "payment_pending";
-    return true;
-  });
+  updateOrdersBadge(orders);
+  const counts = countByStatus(orders);
+  orderFilters.innerHTML = orderFilterLabels.map(([value, label]) => `
+    <button class="admin-filter${value === orderFilter ? " is-active" : ""}" type="button" data-filter="${value}" aria-pressed="${value === orderFilter}">
+      ${label} <span class="admin-filter__count">${counts[value] || 0}</span>
+    </button>
+  `).join("");
+  const visible = orderFilter === "all" ? orders : orders.filter((order) => order.status === orderFilter);
+  const emptyText = {
+    paid: "No orders waiting to be dispatched.",
+    dispatched: "No orders on the way right now.",
+    delivered: "No completed orders yet.",
+    payment_pending: "No unfinished checkouts.",
+    cancelled: "No cancelled orders.",
+    all: "No orders yet."
+  }[orderFilter];
   ordersList.innerHTML = visible.length
     ? visible.map(orderMarkup).join("")
-    : '<p class="empty-state">No orders here yet.</p>';
+    : `<p class="empty-state">${emptyText}</p>`;
 }
 
 function showLogin() {
@@ -317,7 +450,8 @@ productForm.addEventListener("submit", async (event) => {
     productForm.elements.year.value = "2025";
     productForm.elements.stock.value = "1";
     productForm.elements.notes.value = "Sealed Hot Wheels pack photographed from available stock.";
-    renderProducts();
+    showTab("products");
+    productsMessage.textContent = `"${name}" was added to the shop.`;
   } catch (error) {
     alert(error.message);
   }
@@ -366,9 +500,39 @@ productsList.addEventListener("click", async (event) => {
   }
 });
 
-orderFilter.addEventListener("change", renderOrders);
+orderFilters.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-filter]");
+  if (!button) return;
+  orderFilter = button.dataset.filter;
+  renderOrders();
+});
 
-ordersList.addEventListener("click", async (event) => {
+document.querySelector(".admin-tabs").addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-tab]");
+  if (tab) showTab(tab.dataset.tab);
+});
+
+document.querySelector(".admin-tabs").addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  const index = tabs.indexOf(currentTab) + (event.key === "ArrowRight" ? 1 : -1);
+  const next = tabs[(index + tabs.length) % tabs.length];
+  showTab(next);
+  document.querySelector(`[data-tab="${next}"]`).focus();
+});
+
+dashboard.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-go]");
+  if (!link) return;
+  if (link.dataset.filter) orderFilter = link.dataset.filter;
+  showTab(link.dataset.go);
+});
+
+window.addEventListener("hashchange", () => {
+  const requested = window.location.hash.slice(1);
+  if (!dashboard.hidden && tabs.includes(requested) && requested !== currentTab) showTab(requested);
+});
+
+dashboard.addEventListener("click", async (event) => {
   const refresh = event.target.closest("[data-order-refresh]");
   const statusButton = event.target.closest("[data-order-status]");
   if (!refresh && !statusButton) return;
@@ -393,7 +557,8 @@ ordersList.addEventListener("click", async (event) => {
         body: JSON.stringify({ status, tracking })
       });
     }
-    renderOrders();
+    if (currentTab === "dashboard") renderDashboard();
+    else renderOrders();
   } catch (error) {
     button.disabled = false;
     alert(error.message);

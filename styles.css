@@ -4639,3 +4639,244 @@ body {
 .studio-preview img.is-editable {
   cursor: crosshair;
 }
+
+/* Admin tabs and dashboard */
+.admin-app {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-app[hidden],
+.admin-panel[hidden] {
+  display: none;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(9, 14, 22, 0.8);
+}
+
+.admin-tab {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-tab:hover {
+  color: #ffffff;
+}
+
+.admin-tab.is-active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.admin-tab__count {
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #1a1204;
+  background: #f5b83d;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.admin-tabs .admin-logout {
+  margin-left: auto;
+  padding: 0 12px;
+}
+
+.admin-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-hero .checkout-panel__body {
+  gap: 6px;
+}
+
+.admin-hero__value {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2.6rem, 6vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.admin-hero p {
+  margin: 0;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-stat {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-height: 118px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: inherit;
+  background: linear-gradient(180deg, rgba(16, 26, 39, 0.96), rgba(24, 20, 35, 0.96));
+  font: inherit;
+  text-align: left;
+}
+
+button.admin-stat {
+  cursor: pointer;
+}
+
+button.admin-stat:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.admin-stat__label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.admin-stat__value {
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.admin-stat__note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.admin-stat--attention {
+  border-color: rgba(245, 184, 61, 0.55);
+}
+
+.admin-stat--attention .admin-stat__note {
+  color: #f5b83d;
+}
+
+.admin-stat--attention .admin-stat__note::before {
+  content: "\25CF  ";
+}
+
+.admin-dashboard-lists {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-dashboard-lists h2 {
+  margin: 0;
+}
+
+.admin-stock-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-stock-item {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-filter {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-filter.is-active {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-filter__count {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-add-panel {
+  max-width: 860px;
+}
+
+#panel-products .admin-products {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 22px;
+}
+
+#panel-products .admin-product {
+  align-content: start;
+}
+
+@media (max-width: 860px) {
+  .admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-dashboard-lists,
+  #panel-products .admin-products {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-tab {
+    padding: 0 10px;
+    font-size: 0.9rem;
+  }
+
+  .admin-stat {
+    min-height: 104px;
+    padding: 12px;
+  }
+
+  .admin-stat__value {
+    font-size: 1.6rem;
+  }
+}
+
+.admin-stock-item .admin-stat__note {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-43">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-44">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -35,8 +35,74 @@
         </div>
       </section>
 
-      <div class="checkout-layout admin-dashboard" id="adminDashboard" hidden>
-        <section class="checkout-panel" aria-labelledby="productFormTitle">
+      <div class="admin-app" id="adminDashboard" hidden>
+        <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+          <button class="admin-tab" type="button" role="tab" id="tab-dashboard" data-tab="dashboard" aria-controls="panel-dashboard">Dashboard</button>
+          <button class="admin-tab" type="button" role="tab" id="tab-orders" data-tab="orders" aria-controls="panel-orders">Orders <span class="admin-tab__count" id="ordersTabCount" hidden></span></button>
+          <button class="admin-tab" type="button" role="tab" id="tab-products" data-tab="products" aria-controls="panel-products">Products</button>
+          <button class="admin-tab" type="button" role="tab" id="tab-add" data-tab="add" aria-controls="panel-add">Add product</button>
+          <button class="remove-button admin-logout" id="logoutButton" type="button">Log out</button>
+        </div>
+
+        <section class="admin-panel" id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" data-panel="dashboard" hidden>
+          <div class="admin-hero checkout-panel">
+            <div class="checkout-panel__body">
+              <p class="admin-stat__label">Revenue from paid orders</p>
+              <p class="admin-hero__value" id="statRevenue">₹0</p>
+              <p class="checkout-note" id="statRevenueNote"></p>
+            </div>
+          </div>
+          <div class="admin-stats" id="adminStats"></div>
+          <div class="admin-dashboard-lists">
+            <section class="checkout-panel" aria-labelledby="attentionTitle">
+              <div class="checkout-panel__body">
+                <div class="admin-orders-head">
+                  <h2 id="attentionTitle">Needs dispatching</h2>
+                  <button class="remove-button account-link" type="button" data-go="orders" data-filter="paid">View all</button>
+                </div>
+                <div class="admin-orders" id="attentionOrders"></div>
+              </div>
+            </section>
+            <section class="checkout-panel" aria-labelledby="stockTitle">
+              <div class="checkout-panel__body">
+                <div class="admin-orders-head">
+                  <h2 id="stockTitle">Out of stock</h2>
+                  <button class="remove-button account-link" type="button" data-go="products">Manage products</button>
+                </div>
+                <div class="admin-stock-list" id="stockList"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="admin-panel checkout-panel" id="panel-orders" role="tabpanel" aria-labelledby="tab-orders" data-panel="orders" hidden>
+          <div class="checkout-panel__body">
+            <div class="admin-orders-head">
+              <div>
+                <p class="eyebrow">Orders</p>
+                <h1>Customer orders</h1>
+              </div>
+            </div>
+            <div class="admin-filters" id="orderFilters" role="group" aria-label="Filter orders by status"></div>
+            <div class="admin-orders" id="adminOrders"></div>
+          </div>
+        </section>
+
+        <section class="admin-panel checkout-panel" id="panel-products" role="tabpanel" aria-labelledby="tab-products" data-panel="products" hidden>
+          <div class="checkout-panel__body">
+            <div class="admin-orders-head">
+              <div>
+                <p class="eyebrow">Products</p>
+                <h1>Your products</h1>
+              </div>
+              <button class="admin-order__action" type="button" data-go="add">Add product</button>
+            </div>
+            <p class="checkout-note" id="productsMessage" role="status" aria-live="polite"></p>
+            <div class="admin-products" id="adminProducts"></div>
+          </div>
+        </section>
+
+        <section class="admin-panel checkout-panel admin-add-panel" id="panel-add" role="tabpanel" aria-labelledby="tab-add" data-panel="add" hidden>
           <div class="checkout-panel__body">
             <p class="eyebrow">Products</p>
             <h1 id="productFormTitle">Add new product</h1>
@@ -100,38 +166,10 @@
             </form>
           </div>
         </section>
-
-        <aside class="checkout-panel" aria-labelledby="customProductsTitle">
-          <div class="checkout-panel__body">
-            <h2 id="customProductsTitle">Added products</h2>
-            <div class="admin-products" id="adminProducts"></div>
-            <button class="remove-button admin-logout" id="logoutButton" type="button">Log out</button>
-          </div>
-        </aside>
-
-        <section class="checkout-panel admin-orders-panel" aria-labelledby="ordersTitle">
-          <div class="checkout-panel__body">
-            <div class="admin-orders-head">
-              <div>
-                <p class="eyebrow">Orders</p>
-                <h2 id="ordersTitle">Customer orders</h2>
-              </div>
-              <label class="field admin-orders-filter">
-                Show
-                <select id="orderFilter">
-                  <option value="todo">To dispatch</option>
-                  <option value="payment_pending">Awaiting payment</option>
-                  <option value="all">All orders</option>
-                </select>
-              </label>
-            </div>
-            <div class="admin-orders" id="adminOrders"></div>
-          </div>
-        </section>
       </div>
     </main>
 
     <script src="admin-studio.js?v=zenzo-race-theme-36"></script>
-    <script src="admin.js?v=zenzo-race-theme-35"></script>
+    <script src="admin.js?v=zenzo-race-theme-37"></script>
   </body>
 </html>
