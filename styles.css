@@ -4880,3 +4880,71 @@ button.admin-stat:hover {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* Button labels come from the button text so they can say Sold out */
+.add-button {
+  font-size: 0.92rem !important;
+}
+
+.add-button::after {
+  content: none;
+}
+
+.add-button:disabled,
+.add-button:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.55) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  cursor: not-allowed;
+}
+
+/* Stock badges on product photos */
+.product-media,
+.product-detail__media {
+  position: relative;
+}
+
+.stock-badge {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.stock-badge--sold {
+  color: #0b0d12;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.stock-badge--low {
+  color: #1a1204;
+  background: #f5b83d;
+}
+
+.product-card--sold-out .product-photo,
+.product-detail__media.is-sold-out img {
+  filter: grayscale(0.85) brightness(0.55) !important;
+}
+
+.product-card--sold-out:hover .product-photo {
+  transform: none !important;
+}
+
+.product-card--sold-out .price {
+  color: var(--muted);
+}
+
+.product-detail__media .stock-badge {
+  top: 18px;
+  left: 18px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+}

@@ -348,7 +348,10 @@ function filteredInventory() {
     return matchesCollection && matchesSubcategory && haystack.includes(query);
   });
 
+  // Sold-out products go to the end, like most shops, whatever the sort.
   return cars.sort((a, b) => {
+    const soldOutOrder = Number(!(a.stock > 0)) - Number(!(b.stock > 0));
+    if (soldOutOrder) return soldOutOrder;
     if (state.sort === "priceAsc") return a.price - b.price;
     if (state.sort === "priceDesc") return b.price - a.price;
     if (state.sort === "yearDesc") return b.year - a.year;
@@ -363,8 +366,12 @@ function cartQuantity(id) {
 function carMarkup(car) {
   const inCart = cartQuantity(car.id);
   const remaining = car.stock - inCart;
-  const stockLabel = car.stock > 1 ? `${remaining} of ${car.stock} left` : remaining > 0 ? "1 available" : "Sold out";
-  const buttonText = remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "Sold out";
+  const soldOut = !(car.stock > 0);
+  const stockLabel = soldOut ? "" : car.stock > 1 ? `${remaining} of ${car.stock} left` : remaining > 0 ? "1 available" : "In your cart";
+  const buttonText = soldOut ? "Sold out" : remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "All in your cart";
+  const stockBadge = soldOut
+    ? '<span class="stock-badge stock-badge--sold">Sold out</span>'
+    : remaining === 1 && car.stock > 1 ? '<span class="stock-badge stock-badge--low">Only 1 left</span>' : "";
   const showcaseImage = showcaseImages[car.id];
   const displayImage = showcaseImage || car.image;
   const imageSrc = displayImage && displayImage.startsWith("data:") ? displayImage : `${displayImage}?v=${assetVersion}`;
@@ -383,9 +390,10 @@ function carMarkup(car) {
   `;
 
   return `
-    <article class="product-card" data-details="${detailsHref}">
+    <article class="product-card${soldOut ? " product-card--sold-out" : ""}" data-details="${detailsHref}">
       <a class="product-link product-media" href="${detailsHref}" style="--car: ${car.color}; --car-bg: ${car.bg}; --glass: ${car.glass};" aria-label="View ${car.name}">
         ${media}
+        ${stockBadge}
       </a>
       <div class="product-info">
         <a class="product-title-link" href="${detailsHref}">
@@ -400,7 +408,7 @@ function carMarkup(car) {
           <span>${productCollection(car)}</span>
           <span>${car.subcategory || car.series}</span>
           <span>${car.year}</span>
-          <span>${stockLabel}</span>
+          ${stockLabel ? `<span>${stockLabel}</span>` : ""}
         </p>
         <a class="details-link" href="${detailsHref}">View details</a>
         <button class="add-button" type="button" data-add="${car.id}" ${remaining <= 0 ? "disabled" : ""}>${buttonText}</button>

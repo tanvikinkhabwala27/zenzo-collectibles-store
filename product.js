@@ -293,8 +293,9 @@ function renderMissingProduct() {
 function renderProduct() {
   const inCart = cartQuantity(product.id);
   const remaining = product.stock - inCart;
-  const stockLabel = product.stock > 1 ? `${remaining} of ${product.stock} left` : remaining > 0 ? "1 available" : "Sold out";
-  const buttonText = remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "Sold out";
+  const soldOut = !(product.stock > 0);
+  const stockLabel = soldOut ? "" : product.stock > 1 ? `${remaining} of ${product.stock} left` : remaining > 0 ? "1 available" : "In your cart";
+  const buttonText = soldOut ? "Sold out" : remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "All in your cart";
   const showcaseImage = (window.zenzoShowcaseImages || {})[product.id];
   const gallery = product.gallery?.length ? product.gallery : [showcaseImage || product.image];
   if (activeImageIndex >= gallery.length) activeImageIndex = 0;
@@ -303,9 +304,10 @@ function renderProduct() {
   document.title = `${product.name} | Zenzo`;
 
   productDetail.innerHTML = `
-    <div class="product-detail__media">
+    <div class="product-detail__media${soldOut ? " is-sold-out" : ""}">
       <img src="${imageSrc}" alt="${product.imageAlt || product.name}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;">
       <span class="photo-fallback" hidden>Photo unavailable</span>
+      ${soldOut ? '<span class="stock-badge stock-badge--sold">Sold out</span>' : ""}
       ${gallery.length > 1 ? `<div class="product-gallery" aria-label="More product photos">
         ${gallery.map((image, index) => `<button class="product-gallery__thumb ${index === activeImageIndex ? "is-active" : ""}" type="button" data-gallery-index="${index}" aria-label="View photo ${index + 1}"><img src="${image}?v=${assetVersion}" alt=""></button>`).join("")}
       </div>` : ""}
@@ -317,7 +319,7 @@ function renderProduct() {
       <p class="meta">
         <span>${product.series}</span>
         <span>${product.year}</span>
-        <span>${stockLabel}</span>
+        ${stockLabel ? `<span>${stockLabel}</span>` : ""}
       </p>
       <div class="detail-block">
         <h2>Description</h2>
