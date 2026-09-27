@@ -821,7 +821,9 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith("/api/account/")) return handleAccountApi(req, res, url);
 
   if (req.method === "GET" && url.pathname === "/api/products") {
-    const products = await readJson(productsFile, []);
+    // Shoppers may get a copy cached for up to a minute; admins always see
+    // their latest changes.
+    const products = await readJson(productsFile, [], { fresh: verifySession(req) });
     if (applyProductFixes(products)) {
       try {
         await updateJson(productsFile, [], (latest) => {
@@ -961,7 +963,7 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/orders") {
     const body = await readBody(req);
     const { customer, shipping } = normalizeCheckout(body);
-    const products = await readJson(productsFile, []);
+    const products = await readJson(productsFile, [], { fresh: true });
     const cart = Array.isArray(body.cart) ? body.cart.slice(0, 100).map(String) : [];
     const items = [];
     for (const id of new Set(cart)) {

@@ -271,10 +271,14 @@ productsList.addEventListener("submit", async (event) => {
 productsList.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-delete]");
   if (!button) return;
+  const name = button.closest(".admin-product")?.querySelector("h3")?.textContent || "this product";
+  if (!window.confirm(`Delete "${name}"? This removes it from the shop and cannot be undone.`)) return;
+  button.disabled = true;
   try {
     await api(`/api/admin/products/${encodeURIComponent(button.dataset.delete)}`, { method: "DELETE" });
     renderProducts();
   } catch (error) {
+    button.disabled = false;
     alert(error.message);
   }
 });
