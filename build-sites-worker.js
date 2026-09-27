@@ -11,7 +11,8 @@ const textFiles = [
   "app.js",
   "product.js",
   "checkout.js",
-  "admin.js"
+  "admin.js",
+  "showcase-images.js"
 ];
 
 const staticFiles = [

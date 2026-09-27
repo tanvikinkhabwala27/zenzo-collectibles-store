@@ -26,7 +26,7 @@ const config = {
 
 const maxPublicBodyBytes = 64 * 1024;
 const maxAdminBodyBytes = 4 * 1024 * 1024;
-const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js"]);
+const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js", "showcase-images.js"]);
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",

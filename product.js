@@ -295,7 +295,8 @@ function renderProduct() {
   const remaining = product.stock - inCart;
   const stockLabel = product.stock > 1 ? `${remaining} of ${product.stock} left` : remaining > 0 ? "1 available" : "Sold out";
   const buttonText = remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "Sold out";
-  const gallery = product.gallery?.length ? product.gallery : [product.image];
+  const showcaseImage = (window.zenzoShowcaseImages || {})[product.id];
+  const gallery = product.gallery?.length ? product.gallery : [showcaseImage || product.image];
   if (activeImageIndex >= gallery.length) activeImageIndex = 0;
   const activeImage = gallery[activeImageIndex];
   const imageSrc = activeImage && activeImage.startsWith("data:") ? activeImage : `${activeImage}?v=${assetVersion}`;
