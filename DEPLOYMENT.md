@@ -65,18 +65,30 @@ below it.
    keys on Preview to test first.
 4. Redeploy so the new variables take effect.
 
-An order is marked `paid` in two independent ways:
+### Order lifecycle
 
-- The browser sends the Razorpay payment signature to `/api/orders/verify`,
-  which checks it with `RAZORPAY_KEY_SECRET` right after the buyer pays.
-- Razorpay's webhook confirms it server-to-server, which covers buyers who
-  close the tab before the page returns.
+1. **Awaiting payment** – the buyer clicks *Pay securely*. The site saves the
+   order, creates a Razorpay order, and remembers it in the buyer's browser.
+2. **Paid** – set by whichever of these happens first:
+   - the payment window reports success and the site checks Razorpay's
+     signature (`/api/orders/verify`);
+   - the buyer comes back from their UPI app or reloads the page, and the site
+     asks Razorpay whether the order was paid (`/api/orders/status`);
+   - Razorpay's webhook reports the payment;
+   - you open the admin *Customer orders* list or press *Check payment*.
+   Payments that are only authorized are captured automatically, so they
+   settle instead of being refunded.
+3. **Dispatched / Delivered** – you mark these in the admin page.
+
+The buyer sees an order confirmation screen with their order ID once paid, and
+their cart is cleared. If they close the payment window and try again, the
+same Razorpay order is reused, so nobody can be charged twice for one cart.
 
 ### Webhook
 
 After the custom domain is active, add a webhook in Razorpay Dashboard >
-Account & Settings > Webhooks for the `order.paid` and `payment.captured`
-events, pointing to:
+Account & Settings > Webhooks for the `order.paid`, `payment.captured` and
+`payment.authorized` events, pointing to:
 
 ```text
 https://zenzo.org.in/api/webhooks/razorpay

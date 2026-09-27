@@ -146,8 +146,8 @@ async function readBlobEntry(file, fallback, { fresh = false } = {}) {
   }
 }
 
-async function readJson(file, fallback) {
-  if (usesBlobStorage) return (await readBlobEntry(file, fallback)).data;
+async function readJson(file, fallback, { fresh = false } = {}) {
+  if (usesBlobStorage) return (await readBlobEntry(file, fallback, { fresh })).data;
   const source = isVercel ? path.join(bundledDataDir, path.basename(file)) : file;
   return readFileJson(source, fallback);
 }
@@ -306,34 +306,78 @@ function normalizeCheckout(body) {
   };
 }
 
-async function createRazorpayOrder(order) {
-  if (!config.razorpayKeyId || !config.razorpayKeySecret) {
-    return null;
-  }
+function razorpayConfigured() {
+  return Boolean(config.razorpayKeyId && config.razorpayKeySecret);
+}
 
+async function razorpayRequest(method, pathname, body) {
   const auth = Buffer.from(`${config.razorpayKeyId}:${config.razorpayKeySecret}`).toString("base64");
-  const response = await fetch("https://api.razorpay.com/v1/orders", {
-    method: "POST",
+  const response = await fetch(`https://api.razorpay.com/v1${pathname}`, {
+    method,
     headers: {
       authorization: `Basic ${auth}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      amount: order.total * 100,
-      currency: "INR",
-      receipt: order.id,
-      notes: {
-        order_id: order.id,
-        customer_email: order.customer.email
-      }
-    })
+    body: body ? JSON.stringify(body) : undefined
   });
-
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data?.error?.description || "Unable to create Razorpay order.");
+    throw new Error(data?.error?.description || "Razorpay request failed.");
   }
   return data;
+}
+
+async function createRazorpayOrder(order) {
+  if (!razorpayConfigured()) return null;
+  return razorpayRequest("POST", "/orders", {
+    amount: order.total * 100,
+    currency: "INR",
+    receipt: order.id,
+    notes: {
+      order_id: order.id,
+      customer_email: order.customer.email
+    }
+  });
+}
+
+// Captures an authorized payment so it settles instead of being auto-refunded
+// when the Razorpay account is not set to capture automatically.
+async function capturePayment(payment) {
+  if (payment.status !== "authorized") return payment;
+  return razorpayRequest("POST", `/payments/${encodeURIComponent(payment.id)}/capture`, {
+    amount: payment.amount,
+    currency: payment.currency
+  });
+}
+
+// Asks Razorpay whether an order has been paid and records it. This closes the
+// loop when the buyer's browser never returned from the UPI app.
+async function reconcileOrder(order) {
+  if (!order || order.status !== "payment_pending" || !order.razorpayOrderId || !razorpayConfigured()) {
+    return order;
+  }
+  const { items = [] } = await razorpayRequest("GET", `/orders/${encodeURIComponent(order.razorpayOrderId)}/payments`);
+  let payment = items.find((item) => item.status === "captured")
+    || items.find((item) => item.status === "authorized");
+  if (!payment) return order;
+  payment = await capturePayment(payment);
+  if (payment.status !== "captured") return order;
+  return (await markOrderPaid(order.razorpayOrderId, payment.id)) || order;
+}
+
+async function findOrder(predicate) {
+  const orders = await readJson(ordersFile, [], { fresh: true });
+  return orders.find(predicate) || null;
+}
+
+function publicOrder(order) {
+  return {
+    orderId: order.id,
+    status: order.status,
+    total: order.total,
+    items: order.items.map(({ name, quantity, price }) => ({ name, quantity, price })),
+    paidAt: order.paidAt || null
+  };
 }
 
 function safeEqualHex(a, b) {
@@ -345,7 +389,8 @@ function safeEqualHex(a, b) {
 async function markOrderPaid(razorpayOrderId, paymentId) {
   const order = await updateJson(ordersFile, [], (orders) => {
     const match = orders.find((item) => item.razorpayOrderId === razorpayOrderId);
-    if (!match || match.status === "paid") return match ? { order: match, newlyPaid: false } : null;
+    if (!match) return null;
+    if (match.paidAt) return { order: match, newlyPaid: false };
     match.status = "paid";
     match.paidAt = new Date().toISOString();
     if (paymentId) match.razorpayPaymentId = paymentId;
@@ -416,6 +461,55 @@ async function handleApi(req, res, url) {
     return send(res, 200, { ok: true });
   }
 
+  if (req.method === "GET" && url.pathname === "/api/admin/orders") {
+    const recentPending = (await readJson(ordersFile, [], { fresh: true }))
+      .filter((order) => order.status === "payment_pending" && Date.now() - Date.parse(order.createdAt) < 1000 * 60 * 60 * 72)
+      .slice(0, 5);
+    await Promise.allSettled(recentPending.map(reconcileOrder));
+    return send(res, 200, await readJson(ordersFile, [], { fresh: true }));
+  }
+
+  if (req.method === "POST" && /^\/api\/admin\/orders\/[^/]+\/refresh$/.test(url.pathname)) {
+    const id = decodeURIComponent(url.pathname.split("/")[4]);
+    const order = await findOrder((item) => item.id === id);
+    if (!order) return send(res, 404, { error: "Order not found." });
+    return send(res, 200, await reconcileOrder(order));
+  }
+
+  if (req.method === "POST" && /^\/api\/admin\/orders\/[^/]+\/status$/.test(url.pathname)) {
+    const id = decodeURIComponent(url.pathname.split("/")[4]);
+    const { status } = await readBody(req);
+    if (!["dispatched", "delivered", "cancelled"].includes(status)) {
+      return send(res, 400, { error: "Unknown order status." });
+    }
+    const order = await updateJson(ordersFile, [], (orders) => {
+      const match = orders.find((item) => item.id === id);
+      if (!match) return null;
+      if (status !== "cancelled" && !["paid", "dispatched", "delivered"].includes(match.status)) {
+        throw badRequest("Only paid orders can be dispatched or delivered.");
+      }
+      match.status = status;
+      match[`${status}At`] = new Date().toISOString();
+      return match;
+    });
+    if (!order) return send(res, 404, { error: "Order not found." });
+    return send(res, 200, order);
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/orders/status") {
+    const id = String(url.searchParams.get("id") || "");
+    const ref = String(url.searchParams.get("ref") || "");
+    if (!id || !ref) return send(res, 400, { error: "Order reference is required." });
+    let order = await findOrder((item) => item.id === id && item.razorpayOrderId === ref);
+    if (!order) return send(res, 404, { error: "Order not found." });
+    try {
+      order = await reconcileOrder(order);
+    } catch (error) {
+      console.error("Unable to reconcile order", id, error);
+    }
+    return send(res, 200, publicOrder(order));
+  }
+
   if (req.method === "POST" && url.pathname === "/api/orders") {
     const body = await readBody(req);
     const { customer, shipping } = normalizeCheckout(body);
@@ -445,10 +539,11 @@ async function handleApi(req, res, url) {
       createdAt: new Date().toISOString()
     };
     const razorpayOrder = await createRazorpayOrder(order);
-    if (razorpayOrder) {
-      order.razorpayOrderId = razorpayOrder.id;
-      order.status = "payment_pending";
+    if (!razorpayOrder) {
+      return send(res, 503, { error: "Online payment is not available right now. Please try again later." });
     }
+    order.razorpayOrderId = razorpayOrder.id;
+    order.status = "payment_pending";
     await updateJson(ordersFile, [], (orders) => {
       orders.unshift(order);
     });
@@ -457,8 +552,9 @@ async function handleApi(req, res, url) {
       amount: total * 100,
       currency: "INR",
       razorpayKeyId: config.razorpayKeyId,
-      razorpayOrderId: razorpayOrder?.id || null,
-      paymentConfigured: Boolean(razorpayOrder)
+      razorpayOrderId: razorpayOrder.id,
+      paymentConfigured: true,
+      total
     });
   }
 
@@ -475,9 +571,14 @@ async function handleApi(req, res, url) {
     if (!razorpayOrderId || !paymentId || !safeEqualHex(body.razorpay_signature, expected)) {
       return send(res, 400, { error: "Payment could not be verified." });
     }
+    try {
+      await capturePayment(await razorpayRequest("GET", `/payments/${encodeURIComponent(paymentId)}`));
+    } catch (error) {
+      console.error("Unable to capture payment", paymentId, error);
+    }
     const order = await markOrderPaid(razorpayOrderId, paymentId);
     if (!order) return send(res, 404, { error: "Order not found." });
-    return send(res, 200, { ok: true, orderId: order.id, status: order.status });
+    return send(res, 200, { ok: true, ...publicOrder(order) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/webhooks/razorpay") {
@@ -500,6 +601,9 @@ async function handleApi(req, res, url) {
     const razorpayOrderId = payment?.order_id || event?.payload?.order?.entity?.id;
     if (razorpayOrderId && (event.event === "order.paid" || event.event === "payment.captured")) {
       await markOrderPaid(razorpayOrderId, payment?.id);
+    } else if (razorpayOrderId && event.event === "payment.authorized" && payment) {
+      const captured = await capturePayment(payment);
+      if (captured.status === "captured") await markOrderPaid(razorpayOrderId, captured.id);
     }
     return send(res, 200, { ok: true });
   }

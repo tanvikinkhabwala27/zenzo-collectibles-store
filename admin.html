@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-37">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-39">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -98,9 +98,29 @@
             <button class="remove-button admin-logout" id="logoutButton" type="button">Log out</button>
           </div>
         </aside>
+
+        <section class="checkout-panel admin-orders-panel" aria-labelledby="ordersTitle">
+          <div class="checkout-panel__body">
+            <div class="admin-orders-head">
+              <div>
+                <p class="eyebrow">Orders</p>
+                <h2 id="ordersTitle">Customer orders</h2>
+              </div>
+              <label class="field admin-orders-filter">
+                Show
+                <select id="orderFilter">
+                  <option value="todo">To dispatch</option>
+                  <option value="payment_pending">Awaiting payment</option>
+                  <option value="all">All orders</option>
+                </select>
+              </label>
+            </div>
+            <div class="admin-orders" id="adminOrders"></div>
+          </div>
+        </section>
       </div>
     </main>
 
-    <script src="admin.js?v=zenzo-race-theme-28"></script>
+    <script src="admin.js?v=zenzo-race-theme-29"></script>
   </body>
 </html>

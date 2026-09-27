@@ -5,6 +5,27 @@ const dashboard = document.querySelector("#adminDashboard");
 const productForm = document.querySelector("#productForm");
 const productsList = document.querySelector("#adminProducts");
 const logoutButton = document.querySelector("#logoutButton");
+const ordersList = document.querySelector("#adminOrders");
+const orderFilter = document.querySelector("#orderFilter");
+const statusLabels = {
+  created: "Not paid",
+  payment_pending: "Awaiting payment",
+  paid: "Paid - ready to dispatch",
+  dispatched: "Dispatched",
+  delivered: "Delivered",
+  cancelled: "Cancelled"
+};
+const dateFormat = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" });
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -27,6 +48,59 @@ function showDashboard() {
   loginPanel.hidden = true;
   dashboard.hidden = false;
   renderProducts();
+  renderOrders();
+}
+
+function orderActions(order) {
+  const id = escapeHtml(order.id);
+  if (order.status === "payment_pending") {
+    return `<button class="remove-button" type="button" data-order-refresh="${id}">Check payment</button>`;
+  }
+  if (order.status === "paid") {
+    return `<button class="admin-order__action" type="button" data-order-status="dispatched" data-order-id="${id}">Mark dispatched</button>`;
+  }
+  if (order.status === "dispatched") {
+    return `<button class="admin-order__action" type="button" data-order-status="delivered" data-order-id="${id}">Mark delivered</button>`;
+  }
+  return "";
+}
+
+function orderMarkup(order) {
+  const customer = order.customer || {};
+  const shipping = order.shipping || {};
+  const items = (order.items || []).map((item) => `${escapeHtml(item.name)} &times; ${item.quantity}`).join("<br>");
+  return `
+    <article class="admin-order admin-order--${escapeHtml(order.status)}">
+      <div class="admin-order__top">
+        <strong>${escapeHtml(order.id)}</strong>
+        <span class="admin-order__status">${escapeHtml(statusLabels[order.status] || order.status)}</span>
+      </div>
+      <p>${order.createdAt ? dateFormat.format(new Date(order.createdAt)) : ""} &middot; ${money.format(order.total || 0)}${order.razorpayPaymentId ? ` &middot; Payment ${escapeHtml(order.razorpayPaymentId)}` : ""}</p>
+      <p>${items}</p>
+      <p><strong>${escapeHtml(customer.name)}</strong> &middot; ${escapeHtml(customer.phone)} &middot; ${escapeHtml(customer.email)}</p>
+      <p>${escapeHtml(shipping.address)}, ${escapeHtml(shipping.city)}, ${escapeHtml(shipping.state)} ${escapeHtml(shipping.pin)}</p>
+      <div class="admin-order__actions">${orderActions(order)}</div>
+    </article>
+  `;
+}
+
+async function renderOrders() {
+  let orders = [];
+  try {
+    orders = await api("/api/admin/orders");
+  } catch (error) {
+    ordersList.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  const filter = orderFilter.value;
+  const visible = orders.filter((order) => {
+    if (filter === "todo") return order.status === "paid";
+    if (filter === "payment_pending") return order.status === "payment_pending";
+    return true;
+  });
+  ordersList.innerHTML = visible.length
+    ? visible.map(orderMarkup).join("")
+    : '<p class="empty-state">No orders here yet.</p>';
 }
 
 function showLogin() {
@@ -149,6 +223,31 @@ productsList.addEventListener("click", async (event) => {
     await api(`/api/admin/products/${encodeURIComponent(button.dataset.delete)}`, { method: "DELETE" });
     renderProducts();
   } catch (error) {
+    alert(error.message);
+  }
+});
+
+orderFilter.addEventListener("change", renderOrders);
+
+ordersList.addEventListener("click", async (event) => {
+  const refresh = event.target.closest("[data-order-refresh]");
+  const statusButton = event.target.closest("[data-order-status]");
+  if (!refresh && !statusButton) return;
+  const button = refresh || statusButton;
+  button.disabled = true;
+  try {
+    if (refresh) {
+      const order = await api(`/api/admin/orders/${encodeURIComponent(refresh.dataset.orderRefresh)}/refresh`, { method: "POST" });
+      if (order.status === "payment_pending") alert("Razorpay has no completed payment for this order yet.");
+    } else {
+      await api(`/api/admin/orders/${encodeURIComponent(statusButton.dataset.orderId)}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status: statusButton.dataset.orderStatus })
+      });
+    }
+    renderOrders();
+  } catch (error) {
+    button.disabled = false;
     alert(error.message);
   }
 });

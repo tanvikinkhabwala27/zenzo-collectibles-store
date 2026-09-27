@@ -4342,3 +4342,103 @@ body {
     width: 54px;
   }
 }
+
+.order-confirmed {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 100%;
+  max-width: 640px;
+}
+
+.order-confirmed .primary-link {
+  justify-self: start;
+}
+
+.admin-orders-panel {
+  grid-column: 1 / -1;
+}
+
+.admin-orders-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.admin-orders-head h2 {
+  margin: 0;
+}
+
+.admin-orders-filter {
+  min-width: 180px;
+}
+
+.admin-orders {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-order {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.admin-order p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-order p strong {
+  color: inherit;
+}
+
+.admin-order__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-order__status {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.admin-order--paid .admin-order__status {
+  border-color: #2fbf71;
+  color: #2fbf71;
+}
+
+.admin-order__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-order__actions button {
+  width: auto;
+}
+
+.admin-order__action {
+  padding: 8px 14px;
+  border: 1px solid #2fbf71;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #1f8f53;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-order__action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
