@@ -256,7 +256,12 @@ function showPreview(form, photo) {
   preview.hidden = false;
   preview.querySelector("img").src = photo.dataUrl;
   preview.querySelector("img").classList.toggle("is-editable", Boolean(photo.canEdit));
-  preview.querySelector("p").textContent = studioNotes[photo.mode];
+  const longest = Math.max(photo.sourceWidth || 0, photo.sourceHeight || 0);
+  const lowResolution = longest && longest < 1000
+    ? ` This photo is only ${photo.sourceWidth} × ${photo.sourceHeight} pixels, so it will look soft. For a sharp result, upload a photo at least 1200 pixels wide (any recent phone photo is fine).`
+    : "";
+  preview.querySelector("p").textContent = studioNotes[photo.mode] + lowResolution;
+  preview.classList.toggle("is-low-res", Boolean(lowResolution));
   let reset = preview.querySelector(".studio-reset");
   if (photo.canEdit && !reset) {
     reset = document.createElement("button");

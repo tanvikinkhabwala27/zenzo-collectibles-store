@@ -4948,3 +4948,7 @@ button.admin-stat:hover {
   padding: 8px 16px;
   font-size: 0.9rem;
 }
+
+.studio-preview.is-low-res p {
+  color: #f5b83d;
+}

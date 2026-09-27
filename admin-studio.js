@@ -227,10 +227,20 @@
           out[p * 4 + 3] = 0;
           continue;
         }
-        // Soften the cut edge so the product blends into the stage.
-        const edge = (x > 0 && background[p - 1]) || (x < width - 1 && background[p + 1])
-          || (y > 0 && background[p - width]) || (y < height - 1 && background[p + width]);
-        if (edge) out[p * 4 + 3] = 170;
+        // Anti-alias the cut edge: alpha follows how much of the 3x3
+        // neighbourhood is product, so edges stay smooth when enlarged.
+        let kept = 0;
+        let counted = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            counted += 1;
+            if (!background[ny * width + nx]) kept += 1;
+          }
+        }
+        if (kept < counted) out[p * 4 + 3] = Math.round((out[p * 4 + 3] * (kept + 1)) / (counted + 1));
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -254,7 +264,10 @@
   function composeCutOut(ctx, product) {
     drawStage(ctx);
     const image = product.canvas;
-    const scale = Math.min((size * 0.74) / image.width, (size * 0.56) / image.height);
+    // Enlarging a small photo more than this only adds blur, so small
+    // products are shown a little smaller instead.
+    const maxEnlarge = 2;
+    const scale = Math.min((size * 0.74) / image.width, (size * 0.56) / image.height, maxEnlarge);
     const width = image.width * scale;
     const height = image.height * scale;
     const x = (size - width) / 2;
@@ -331,7 +344,13 @@
     const img = await loadImage(file);
     const canvas = newCanvas();
     const ctx = context(canvas);
-    const photo = { mode: "original", canEdit: false, dataUrl: "" };
+    const photo = {
+      mode: "original",
+      canEdit: false,
+      dataUrl: "",
+      sourceWidth: img.naturalWidth || img.width,
+      sourceHeight: img.naturalHeight || img.height
+    };
 
     if (!studio) {
       composeOriginal(ctx, img);
