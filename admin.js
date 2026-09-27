@@ -15,6 +15,7 @@ const statusLabels = {
   delivered: "Delivered",
   cancelled: "Cancelled"
 };
+const collections = ["Hot Wheels", "Figurines", "3D collectibles", "Accessories"];
 const dateFormat = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
 function escapeHtml(value) {
@@ -152,16 +153,47 @@ async function renderProducts() {
     return;
   }
 
-  productsList.innerHTML = products.map((product) => `
+  productsList.innerHTML = products.map((product) => {
+    const collection = product.collection || "Hot Wheels";
+    return `
     <div class="admin-product">
-      ${product.image ? `<img src="${product.image}" alt="${product.name}">` : ""}
+      ${product.image ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">` : ""}
       <div>
-        <h3>${product.name}</h3>
-        <p>${product.collection || "Hot Wheels"} &middot; ${product.series} &middot; ${product.condition} &middot; ${money.format(product.price)} &middot; Stock ${product.stock}</p>
+        <h3>${escapeHtml(product.name)}</h3>
+        <p>${escapeHtml(collection)} &middot; ${escapeHtml(product.series)} &middot; ${money.format(product.price)} &middot; Stock ${product.stock}</p>
       </div>
-      <button class="remove-button" type="button" data-delete="${product.id}">Delete</button>
+      <button class="remove-button" type="button" data-delete="${escapeHtml(product.id)}">Delete</button>
+      <details class="admin-product__edit">
+        <summary>Edit</summary>
+        <form class="form-grid" data-edit="${escapeHtml(product.id)}">
+          <label class="field">
+            Collection
+            <select name="collection">
+              ${collections.map((name) => `<option ${name === collection ? "selected" : ""}>${name}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field">
+            Series
+            <input name="series" value="${escapeHtml(product.series)}" required>
+          </label>
+          <label class="field">
+            Price in INR
+            <input name="price" inputmode="numeric" value="${product.price}" required>
+          </label>
+          <label class="field">
+            Stock
+            <input name="stock" inputmode="numeric" value="${product.stock}" required>
+          </label>
+          <label class="field field--full">
+            Notes
+            <textarea name="notes">${escapeHtml(product.notes)}</textarea>
+          </label>
+          <button class="admin-order__action field--full" type="submit">Save changes</button>
+        </form>
+      </details>
     </div>
-  `).join("");
+  `;
+  }).join("");
 }
 
 loginForm.addEventListener("submit", async (event) => {
@@ -212,6 +244,25 @@ productForm.addEventListener("submit", async (event) => {
     productForm.elements.notes.value = "Sealed Hot Wheels pack photographed from available stock.";
     renderProducts();
   } catch (error) {
+    alert(error.message);
+  }
+});
+
+productsList.addEventListener("submit", async (event) => {
+  const editForm = event.target.closest("[data-edit]");
+  if (!editForm) return;
+  event.preventDefault();
+  const form = new FormData(editForm);
+  const button = editForm.querySelector("button");
+  button.disabled = true;
+  try {
+    await api(`/api/admin/products/${encodeURIComponent(editForm.dataset.edit)}`, {
+      method: "PATCH",
+      body: JSON.stringify(Object.fromEntries(form))
+    });
+    renderProducts();
+  } catch (error) {
+    button.disabled = false;
     alert(error.message);
   }
 });

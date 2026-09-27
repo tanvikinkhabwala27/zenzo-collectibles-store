@@ -2,7 +2,7 @@
   {
     "id": "admin-f1-stand-1783480383065",
     "name": "F1 stand",
-    "series": "Assorted Hot Wheels",
+    "series": "Display Stands",
     "year": 2025,
     "condition": "Sealed Pack",
     "price": 500,
@@ -12,7 +12,8 @@
     "color": "#242424",
     "bg": "#f8f7f3",
     "glass": "#ffffff",
-    "notes": "Sealed Hot Wheels pack photographed from available stock."
+    "notes": "3D printed display stand for Formula 1 die-cast cars.",
+    "collection": "3D collectibles"
   },
   {
     "id": "f1-race-team-5-pack",

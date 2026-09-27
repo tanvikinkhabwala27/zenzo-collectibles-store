@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My orders | Zenzo</title>
+    <meta name="description" content="Sign in to see your Zenzo orders.">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-40">
+  </head>
+  <body class="checkout-page account-page">
+    <main class="checkout-shell">
+      <nav class="checkout-nav" aria-label="Account navigation">
+        <a class="brand" href="index.html" aria-label="Zenzo home">
+          <span class="brand__logo-frame"><img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="brand__logo" width="520" height="138"></span>
+        </a>
+        <a class="primary-link" href="index.html#catalog">Back to shop</a>
+      </nav>
+
+      <section class="checkout-panel account-panel" id="signInPanel" aria-labelledby="signInTitle" hidden>
+        <div class="checkout-panel__body">
+          <div class="account-tabs" role="tablist" aria-label="Account options">
+            <button class="account-tab is-active" type="button" role="tab" data-mode="signin" aria-selected="true">Sign in</button>
+            <button class="account-tab" type="button" role="tab" data-mode="signup" aria-selected="false">Create account</button>
+          </div>
+
+          <div>
+            <p class="eyebrow">My orders</p>
+            <h1 id="signInTitle">Welcome back</h1>
+            <p class="checkout-note" id="signInIntro">Sign in to see your orders.</p>
+          </div>
+
+          <div class="account-mode" data-mode-panel="signin">
+            <div class="account-google" id="googleSignIn" hidden></div>
+            <p class="account-divider" id="signInDivider" hidden><span>or</span></p>
+            <form class="form-grid account-form" id="passwordForm" hidden>
+              <label class="field field--full">
+                Email address
+                <input name="email" type="email" autocomplete="email" maxlength="254" required>
+              </label>
+              <label class="field field--full">
+                Password
+                <input name="password" type="password" autocomplete="current-password" maxlength="128" required>
+              </label>
+              <button class="place-order field--full" type="submit">Sign in</button>
+            </form>
+            <p class="account-links" id="signInLinks" hidden>
+              <button class="remove-button account-link" type="button" data-mode="reset">Forgot password?</button>
+              <button class="remove-button account-link" type="button" data-mode="code">Sign in with a one-time email code</button>
+            </p>
+          </div>
+
+          <div class="account-mode" data-mode-panel="code signup reset" hidden>
+            <form class="form-grid account-form" id="emailForm">
+              <label class="field field--full">
+                Email address
+                <input name="email" type="email" autocomplete="email" maxlength="254" required>
+              </label>
+              <button class="place-order field--full" type="submit">Email me a code</button>
+            </form>
+
+            <form class="form-grid account-form" id="codeForm" hidden>
+              <p class="checkout-note field--full" id="codeSentTo"></p>
+              <label class="field field--full">
+                6-digit code
+                <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required>
+              </label>
+              <label class="field field--full" id="newPasswordField">
+                <span id="newPasswordLabel">Choose a password</span>
+                <input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128">
+              </label>
+              <button class="place-order field--full" type="submit" id="codeSubmit">Continue</button>
+              <button class="remove-button field--full account-link" id="changeEmail" type="button">Use a different email</button>
+            </form>
+            <p class="account-links" id="codeLinks">
+              <button class="remove-button account-link" type="button" data-mode="signin">Back to sign in</button>
+            </p>
+          </div>
+
+          <p class="checkout-note" id="signInUnavailable" hidden>Customer sign-in is being set up. For questions about an order, please contact Zenzo with your order ID.</p>
+          <p class="checkout-note account-message" id="signInMessage" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="checkout-panel account-panel" id="ordersPanel" aria-labelledby="ordersTitle" hidden>
+        <div class="checkout-panel__body">
+          <div class="account-head">
+            <div>
+              <p class="eyebrow">My orders</p>
+              <h1 id="ordersTitle">Your orders</h1>
+              <p class="checkout-note" id="signedInAs"></p>
+            </div>
+            <button class="remove-button" id="signOut" type="button">Sign out</button>
+          </div>
+          <div class="admin-orders" id="customerOrders"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="account.js?v=zenzo-race-theme-40"></script>
+  </body>
+</html>

@@ -4442,3 +4442,126 @@ body {
   opacity: 0.6;
   cursor: wait;
 }
+
+.admin-product__edit {
+  grid-column: 1 / -1;
+}
+
+.admin-product__edit summary {
+  width: fit-content;
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-product__edit form {
+  margin-top: 10px;
+}
+
+.checkout-nav__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.account-button {
+  white-space: nowrap;
+}
+
+.account-panel {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.account-google {
+  min-height: 44px;
+}
+
+.account-divider {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.account-divider::before,
+.account-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.account-link {
+  justify-self: start;
+  padding: 0;
+}
+
+.account-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.account-head h1 {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .checkout-nav__actions .secondary-link,
+  .checkout-nav__actions .primary-link {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+.account-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.account-tab {
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.account-tab.is-active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.account-mode {
+  display: grid;
+  gap: 16px;
+}
+
+.account-mode[hidden] {
+  display: none;
+}
+
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+}
+
+.account-message:empty {
+  display: none;
+}

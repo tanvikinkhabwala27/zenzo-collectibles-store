@@ -8,6 +8,9 @@ const bundledDataDir = path.join(rootDir, "data");
 const dataDir = process.env.DATA_DIR || bundledDataDir;
 const productsFile = path.join(dataDir, "products.json");
 const ordersFile = path.join(dataDir, "orders.json");
+const loginCodesFile = path.join(dataDir, "login-codes.json");
+const customersFile = path.join(dataDir, "customers.json");
+const collections = ["Hot Wheels", "Figurines", "3D collectibles", "Accessories"];
 const isVercel = Boolean(process.env.VERCEL);
 const isProduction = isVercel || Boolean(process.env.RENDER) || process.env.NODE_ENV === "production";
 const usesBlobStorage = isVercel && Boolean(process.env.BLOB_READ_WRITE_TOKEN);
@@ -21,12 +24,19 @@ const config = {
   sessionSecret: process.env.SESSION_SECRET || (isProduction ? "" : "dev-change-this-session-secret"),
   razorpayKeyId: process.env.RAZORPAY_KEY_ID || "",
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || "",
-  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || ""
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+  resendApiKey: process.env.RESEND_API_KEY || "",
+  emailFrom: process.env.EMAIL_FROM || "",
+  googleClientId: process.env.GOOGLE_CLIENT_ID || ""
 };
+
+const customerSessionDays = 30;
+const loginCodeMinutes = 10;
+const maxCodeAttempts = 5;
 
 const maxPublicBodyBytes = 64 * 1024;
 const maxAdminBodyBytes = 4 * 1024 * 1024;
-const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js", "showcase-images.js"]);
+const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js", "account.js", "showcase-images.js"]);
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -79,23 +89,42 @@ function sign(value) {
   return crypto.createHmac("sha256", config.sessionSecret).update(value).digest("hex");
 }
 
-function makeSession(email) {
-  const payload = Buffer.from(JSON.stringify({ email, exp: Date.now() + 1000 * 60 * 60 * 8 })).toString("base64url");
+function makeToken(data) {
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
   return `${payload}.${sign(payload)}`;
+}
+
+function readToken(token) {
+  if (!token || !config.sessionSecret) return null;
+  const [payload, signature] = token.split(".");
+  if (!payload || !safeEqual(signature, sign(payload))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return data.exp > Date.now() ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+function makeSession(email) {
+  return makeToken({ kind: "admin", email, exp: Date.now() + 1000 * 60 * 60 * 8 });
+}
+
+function customerCookie(email) {
+  const maxAge = customerSessionDays * 24 * 60 * 60;
+  const token = makeToken({ kind: "customer", email, exp: Date.now() + maxAge * 1000 });
+  return `zenzo_customer=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${isVercel ? "; Secure" : ""}`;
+}
+
+function customerEmail(req) {
+  const data = readToken(parseCookies(req).zenzo_customer);
+  return data?.kind === "customer" ? data.email : null;
 }
 
 function verifySession(req) {
   if (!adminConfigured()) return false;
-  const token = parseCookies(req).zenzo_session;
-  if (!token) return false;
-  const [payload, signature] = token.split(".");
-  if (!payload || !safeEqual(signature, sign(payload))) return false;
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return data.email === config.adminEmail && data.exp > Date.now();
-  } catch {
-    return false;
-  }
+  const data = readToken(parseCookies(req).zenzo_session);
+  return data?.kind === "admin" && data.email === config.adminEmail;
 }
 
 async function readFileJson(file, fallback) {
@@ -267,7 +296,7 @@ function normalizeProduct(input) {
   return {
     id: `admin-${slugify(name)}-${Date.now()}`,
     name,
-    collection: cleanText(input.collection || "Hot Wheels", "Collection"),
+    collection: collections.includes(input.collection) ? input.collection : "Hot Wheels",
     series: cleanText(input.series || "Assorted Hot Wheels", "Series"),
     year: Number(input.year) || new Date().getFullYear(),
     condition: cleanText(input.condition || "Sealed Pack", "Condition"),
@@ -285,7 +314,7 @@ function normalizeProduct(input) {
 function normalizeCheckout(body) {
   const customer = body.customer || {};
   const shipping = body.shipping || {};
-  const email = cleanText(customer.email, "Email", { required: true, max: 254 });
+  const email = cleanText(customer.email, "Email", { required: true, max: 254 }).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Enter a valid email address.");
   const phone = cleanText(customer.phone, "Mobile number", { required: true, max: 20 });
   if (!/^[0-9+\-\s]{8,20}$/.test(phone)) throw badRequest("Enter a valid mobile number.");
@@ -408,7 +437,259 @@ async function markOrderPaid(razorpayOrderId, paymentId) {
   return order.order;
 }
 
+function normalizeEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@<>"`]+@[^\s@<>"`]+\.[^\s@<>"`]+$/.test(email)) {
+    throw badRequest("Enter a valid email address.");
+  }
+  return email;
+}
+
+function hashLoginCode(email, code) {
+  return crypto.createHmac("sha256", config.sessionSecret).update(`login:${email}:${code}`).digest("hex");
+}
+
+function emailLoginConfigured() {
+  return Boolean(config.resendApiKey && config.emailFrom && config.sessionSecret);
+}
+
+function googleLoginConfigured() {
+  return Boolean(config.googleClientId && config.sessionSecret);
+}
+
+async function sendLoginCode(email, code) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${config.resendApiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      from: config.emailFrom,
+      to: [email],
+      subject: `Your Zenzo sign-in code: ${code}`,
+      text: `Your Zenzo sign-in code is ${code}. It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.`,
+      html: `<p>Your Zenzo sign-in code is</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.</p>`
+    })
+  });
+  if (!response.ok) {
+    console.error("Unable to send sign-in email", response.status, await response.text());
+    throw new Error("We couldn't send the email right now. Please try again shortly.");
+  }
+}
+
+let googleKeys = { keys: [], expiresAt: 0 };
+
+async function googleSigningKey(kid) {
+  if (Date.now() > googleKeys.expiresAt || !googleKeys.keys.some((key) => key.kid === kid)) {
+    const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+    if (!response.ok) throw new Error("Unable to reach Google. Please try again.");
+    const maxAge = Number(/max-age=(\d+)/.exec(response.headers.get("cache-control") || "")?.[1] || 3600);
+    googleKeys = { keys: (await response.json()).keys || [], expiresAt: Date.now() + maxAge * 1000 };
+  }
+  const jwk = googleKeys.keys.find((key) => key.kid === kid);
+  return jwk ? crypto.createPublicKey({ key: jwk, format: "jwk" }) : null;
+}
+
+// Verifies a Google Identity Services ID token and returns its verified email.
+async function verifyGoogleCredential(credential) {
+  const unauthorized = badRequest("Google sign-in could not be verified.");
+  const parts = String(credential || "").split(".");
+  if (parts.length !== 3) throw unauthorized;
+  let header;
+  let claims;
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+  } catch {
+    throw unauthorized;
+  }
+  if (header.alg !== "RS256") throw unauthorized;
+  const key = await googleSigningKey(header.kid);
+  const valid = key && crypto.verify(
+    "RSA-SHA256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    key,
+    Buffer.from(parts[2], "base64url")
+  );
+  if (!valid) throw unauthorized;
+  const issuerOk = claims.iss === "accounts.google.com" || claims.iss === "https://accounts.google.com";
+  if (!issuerOk || claims.aud !== config.googleClientId || claims.exp * 1000 < Date.now()) throw unauthorized;
+  if (claims.email_verified !== true || !claims.email) throw badRequest("Your Google account email is not verified.");
+  return normalizeEmail(claims.email);
+}
+
+async function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = await new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, 64, (error, key) => (error ? reject(error) : resolve(key)));
+  });
+  return `scrypt$${salt.toString("base64")}$${hash.toString("base64")}`;
+}
+
+async function passwordMatches(password, stored) {
+  const [, salt, expected] = String(stored || "scrypt$AAAAAAAAAAAAAAAAAAAAAA==$").split("$");
+  const hash = await new Promise((resolve, reject) => {
+    crypto.scrypt(password, Buffer.from(salt, "base64"), 64, (error, key) => (error ? reject(error) : resolve(key)));
+  });
+  const expectedHash = Buffer.from(expected || "", "base64");
+  return expectedHash.length === hash.length && crypto.timingSafeEqual(hash, expectedHash);
+}
+
+function cleanPassword(value) {
+  const password = String(value || "");
+  if (password.length < 8) throw badRequest("Use a password of at least 8 characters.");
+  if (password.length > 128) throw badRequest("That password is too long.");
+  return password;
+}
+
+function customerOrder(order) {
+  return {
+    ...publicOrder(order),
+    createdAt: order.createdAt,
+    dispatchedAt: order.dispatchedAt || null,
+    deliveredAt: order.deliveredAt || null,
+    shipping: order.shipping
+  };
+}
+
+async function handleAccountApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/account/config") {
+    return send(res, 200, {
+      emailCode: emailLoginConfigured(),
+      passwords: Boolean(config.sessionSecret),
+      googleClientId: googleLoginConfigured() ? config.googleClientId : null
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/account/me") {
+    return send(res, 200, { email: customerEmail(req) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/account/logout") {
+    return send(res, 200, { ok: true }, {
+      "set-cookie": `zenzo_customer=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isVercel ? "; Secure" : ""}`
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/account/code") {
+    if (!emailLoginConfigured()) return send(res, 503, { error: "Email sign-in is not available yet." });
+    const email = normalizeEmail((await readBody(req)).email);
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+    const now = Date.now();
+    const allowed = await updateJson(loginCodesFile, {}, (codes) => {
+      for (const [key, entry] of Object.entries(codes)) {
+        if (now - entry.windowStart > 60 * 60 * 1000 && entry.expiresAt < now) delete codes[key];
+      }
+      const entry = codes[email] || { windowStart: now, sent: 0 };
+      if (now - entry.windowStart > 60 * 60 * 1000) Object.assign(entry, { windowStart: now, sent: 0 });
+      if (entry.sentAt && now - entry.sentAt < 60 * 1000) return "wait";
+      if (entry.sent >= 5) return "limit";
+      Object.assign(entry, {
+        hash: hashLoginCode(email, code),
+        expiresAt: now + loginCodeMinutes * 60 * 1000,
+        attempts: 0,
+        sentAt: now,
+        sent: entry.sent + 1
+      });
+      codes[email] = entry;
+      return "ok";
+    });
+    if (allowed === "wait") return send(res, 429, { error: "Please wait a minute before asking for another code." });
+    if (allowed === "limit") return send(res, 429, { error: "Too many codes requested. Please try again in an hour." });
+    await sendLoginCode(email, code);
+    return send(res, 200, { ok: true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/account/verify") {
+    if (!emailLoginConfigured()) return send(res, 503, { error: "Email sign-in is not available yet." });
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    const code = String(body.code || "").trim();
+    const password = body.password === undefined ? null : cleanPassword(body.password);
+    const result = await updateJson(loginCodesFile, {}, (codes) => {
+      const entry = codes[email];
+      if (!entry?.hash || entry.expiresAt < Date.now()) return "expired";
+      if (entry.attempts >= maxCodeAttempts) return "locked";
+      if (!/^\d{6}$/.test(code) || !safeEqual(entry.hash, hashLoginCode(email, code))) {
+        entry.attempts += 1;
+        return entry.attempts >= maxCodeAttempts ? "locked" : "wrong";
+      }
+      delete entry.hash;
+      return "ok";
+    });
+    if (result === "expired") return send(res, 400, { error: "That code has expired. Please ask for a new one." });
+    if (result === "locked") return send(res, 400, { error: "Too many wrong attempts. Please ask for a new code." });
+    if (result === "wrong") return send(res, 400, { error: "That code is not right. Please check and try again." });
+    if (password) {
+      const passwordHash = await hashPassword(password);
+      await updateJson(customersFile, {}, (customers) => {
+        customers[email] = {
+          ...customers[email],
+          passwordHash,
+          createdAt: customers[email]?.createdAt || new Date().toISOString(),
+          failedLogins: 0,
+          lockedUntil: 0
+        };
+      });
+    }
+    return send(res, 200, { email }, { "set-cookie": customerCookie(email) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/account/login") {
+    if (!config.sessionSecret) return send(res, 503, { error: "Sign-in is not available yet." });
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "").slice(0, 128);
+    const customers = await readJson(customersFile, {}, { fresh: true });
+    const account = customers[email];
+    if (account?.lockedUntil > Date.now()) {
+      return send(res, 429, { error: "Too many attempts. Please try again in 15 minutes or use \"Forgot password\"." });
+    }
+    // Always run the hash so unknown emails take as long as wrong passwords.
+    const valid = await passwordMatches(password, account?.passwordHash);
+    if (!account?.passwordHash || !valid) {
+      if (account) {
+        await updateJson(customersFile, {}, (latest) => {
+          const entry = latest[email];
+          if (!entry) return;
+          entry.failedLogins = (entry.failedLogins || 0) + 1;
+          if (entry.failedLogins >= 5) {
+            entry.failedLogins = 0;
+            entry.lockedUntil = Date.now() + 15 * 60 * 1000;
+          }
+        });
+      }
+      return send(res, 401, { error: "Email or password is not right." });
+    }
+    if (account.failedLogins) {
+      await updateJson(customersFile, {}, (latest) => {
+        if (latest[email]) latest[email].failedLogins = 0;
+      });
+    }
+    return send(res, 200, { email }, { "set-cookie": customerCookie(email) });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/account/google") {
+    if (!googleLoginConfigured()) return send(res, 503, { error: "Google sign-in is not available yet." });
+    const email = await verifyGoogleCredential((await readBody(req, 16 * 1024)).credential);
+    return send(res, 200, { email }, { "set-cookie": customerCookie(email) });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/account/orders") {
+    const email = customerEmail(req);
+    if (!email) return send(res, 401, { error: "Please sign in to see your orders." });
+    const orders = (await readJson(ordersFile, [], { fresh: true }))
+      .filter((order) => String(order.customer?.email || "").toLowerCase() === email && order.paidAt);
+    return send(res, 200, orders.map(customerOrder));
+  }
+
+  return send(res, 404, { error: "Not found." });
+}
+
 async function handleApi(req, res, url) {
+  if (url.pathname.startsWith("/api/account/")) return handleAccountApi(req, res, url);
+
   if (req.method === "GET" && url.pathname === "/api/products") {
     return send(res, 200, await readJson(productsFile, []));
   }
@@ -450,6 +731,27 @@ async function handleApi(req, res, url) {
       products.unshift(product);
     });
     return send(res, 201, product);
+  }
+
+  if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/products/")) {
+    const id = decodeURIComponent(url.pathname.split("/").pop());
+    const body = await readBody(req);
+    const collection = cleanText(body.collection, "Collection");
+    if (!collections.includes(collection)) return send(res, 400, { error: "Unknown collection." });
+    const changes = {
+      collection,
+      series: cleanText(body.series, "Series", { required: true }),
+      price: Math.max(0, Math.round(Number(body.price) || 0)),
+      stock: Math.max(0, Math.round(Number(body.stock) || 0)),
+      notes: cleanText(body.notes, "Notes", { max: 2000 })
+    };
+    const product = await updateJson(productsFile, [], (products) => {
+      const match = products.find((item) => item.id === id);
+      if (match) Object.assign(match, changes);
+      return match || null;
+    });
+    if (!product) return send(res, 404, { error: "Product not found." });
+    return send(res, 200, product);
   }
 
   if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/products/")) {

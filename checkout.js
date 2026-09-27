@@ -122,7 +122,10 @@ function showConfirmation(order, { pendingConfirmation = false } = {}) {
         <p class="checkout-note">${pendingConfirmation
           ? "Your payment went through. Zenzo is finishing the confirmation and will contact you if anything else is needed."
           : "Zenzo will pack and dispatch your order and keep you updated by email or phone."}</p>
-        <a class="primary-link" href="index.html#catalog">Continue shopping</a>
+        <div class="checkout-nav__actions">
+          <a class="primary-link" href="index.html#catalog">Continue shopping</a>
+          <a class="secondary-link" href="account.html">View my orders</a>
+        </div>
       </div>
     </section>
   `;
@@ -284,6 +287,9 @@ async function init() {
     inventory = [];
   }
   renderCheckout();
+  api("/api/account/me").then(({ email }) => {
+    if (email && !form.elements.email.value) form.elements.email.value = email;
+  }).catch(() => {});
   const pending = loadPendingOrder();
   if (pending) {
     checkoutNote.textContent = "Checking your last payment...";

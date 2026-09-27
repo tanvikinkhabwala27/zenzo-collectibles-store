@@ -7,12 +7,14 @@ const textFiles = [
   "product.html",
   "checkout.html",
   "admin.html",
+  "account.html",
   "styles.css",
   "app.js",
   "product.js",
   "checkout.js",
   "admin.js",
-  "showcase-images.js"
+  "showcase-images.js",
+  "account.js"
 ];
 
 const staticFiles = [

@@ -42,6 +42,9 @@ SESSION_SECRET=use-a-long-random-secret
 RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxx
 RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxxxxxx
 RAZORPAY_WEBHOOK_SECRET=use-the-secret-from-razorpay-webhook-settings
+RESEND_API_KEY=re_xxxxxxxxxxxxx
+EMAIL_FROM=Zenzo <orders@zenzo.org.in>
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
 ```
 
 `ADMIN_PASSWORD` and `SESSION_SECRET` are both required in production; admin
@@ -96,6 +99,43 @@ https://zenzo.org.in/api/webhooks/razorpay
 
 Use the same signing secret for the Vercel `RAZORPAY_WEBHOOK_SECRET` variable.
 The webhook rejects every request until that secret is set.
+
+## Customer Accounts
+
+Customers open **My orders** (`/account.html`) to see their paid orders.
+Orders are matched to the email address used at checkout.
+
+- **One-time email code** – no account needed; a 6-digit code is emailed.
+- **Create account** – the email is confirmed with a code, then the customer
+  chooses a password. *Forgot password?* uses the same code step.
+- **Email and password** – for returning customers with an account.
+- **Continue with Google** – for returning customers; uses their verified
+  Google email.
+
+Every option needs `SESSION_SECRET`. Options whose service is not configured
+are hidden; with neither service set up, the page says sign-in is being set
+up.
+
+### Email codes (Resend)
+
+1. Create an account at resend.com and add the `zenzo.org.in` domain under
+   **Domains**, then add the DNS records it shows at the domain registrar.
+2. Create an API key under **API Keys** and set `RESEND_API_KEY` in Vercel.
+3. Set `EMAIL_FROM` to a sender on that domain, for example
+   `Zenzo <orders@zenzo.org.in>`.
+
+### Google sign-in
+
+1. In Google Cloud Console, open **APIs & Services > OAuth consent screen**
+   and set it up as an external app named Zenzo.
+2. In **Credentials**, create an **OAuth client ID** of type *Web
+   application*. Under **Authorized JavaScript origins**, add
+   `https://zenzo.org.in`, `https://www.zenzo.org.in` and the `vercel.app`
+   URL.
+3. Set the client ID as `GOOGLE_CLIENT_ID` in Vercel. No client secret is
+   needed.
+
+Redeploy after adding these variables.
 
 ## Local Development
 

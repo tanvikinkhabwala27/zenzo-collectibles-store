@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check app.js && node --check checkout.js && node --check admin.js && node --check product.js && node --check showcase-images.js"
+    "check": "node --check server.js && node --check app.js && node --check checkout.js && node --check admin.js && node --check product.js && node --check showcase-images.js && node --check account.js"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.0"
