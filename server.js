@@ -27,7 +27,8 @@ const config = {
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
   resendApiKey: process.env.RESEND_API_KEY || "",
   emailFrom: process.env.EMAIL_FROM || "",
-  googleClientId: process.env.GOOGLE_CLIENT_ID || ""
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+  siteUrl: (process.env.SITE_URL || "https://zenzo.org.in").replace(/\/$/, "")
 };
 
 const customerSessionDays = 30;
@@ -427,6 +428,7 @@ async function markOrderPaid(razorpayOrderId, paymentId) {
   });
   if (!order) return null;
   if (order.newlyPaid) {
+    await sendOrderEmail(order.order, "confirmed");
     await updateJson(productsFile, [], (products) => {
       for (const line of order.order.items) {
         const product = products.find((item) => item.id === line.id);
@@ -457,24 +459,98 @@ function googleLoginConfigured() {
   return Boolean(config.googleClientId && config.sessionSecret);
 }
 
-async function sendLoginCode(email, code) {
+async function sendEmail({ to, subject, text, html }) {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       authorization: `Bearer ${config.resendApiKey}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      from: config.emailFrom,
-      to: [email],
-      subject: `Your Zenzo sign-in code: ${code}`,
-      text: `Your Zenzo sign-in code is ${code}. It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.`,
-      html: `<p>Your Zenzo sign-in code is</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.</p>`
-    })
+    body: JSON.stringify({ from: config.emailFrom, to: [to], subject, text, html })
   });
   if (!response.ok) {
-    console.error("Unable to send sign-in email", response.status, await response.text());
+    console.error("Unable to send email", subject, response.status, await response.text());
     throw new Error("We couldn't send the email right now. Please try again shortly.");
+  }
+}
+
+async function sendLoginCode(email, code) {
+  await sendEmail({
+    to: email,
+    subject: `Your Zenzo sign-in code: ${code}`,
+    text: `Your Zenzo sign-in code is ${code}. It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.`,
+    html: `<p>Your Zenzo sign-in code is</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>It expires in ${loginCodeMinutes} minutes. If you did not ask for it, you can ignore this email.</p>`
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+const orderEmailCopy = {
+  confirmed: {
+    subject: (order) => `Order confirmed: ${order.id}`,
+    heading: "Thank you! Your order is confirmed.",
+    body: "We've received your payment and will pack your order soon. We'll email you again when it ships."
+  },
+  dispatched: {
+    subject: (order) => `Your Zenzo order ${order.id} is on its way`,
+    heading: "Your order has been dispatched.",
+    body: "Your collectibles are on their way to you."
+  }
+};
+
+// Order updates are best effort: a failed email never blocks a payment or
+// status change, it is only logged.
+async function sendOrderEmail(order, kind) {
+  const email = order.customer?.email;
+  if (!config.resendApiKey || !config.emailFrom || !email) return;
+  const copy = orderEmailCopy[kind];
+  const money = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+  const lines = order.items.map((item) => `${item.name} x ${item.quantity} - ${money(item.price * item.quantity)}`);
+  const shipping = order.shipping || {};
+  const address = [shipping.address, shipping.city, shipping.state, shipping.pin].filter(Boolean).join(", ");
+  const tracking = kind === "dispatched" && order.tracking ? `Tracking: ${order.tracking}` : "";
+  const ordersUrl = `${config.siteUrl}/account.html`;
+  const text = [
+    `Hi ${order.customer.name || "there"},`,
+    "",
+    copy.heading,
+    copy.body,
+    tracking,
+    "",
+    `Order ${order.id}`,
+    ...lines,
+    `Total: ${money(order.total)}`,
+    "",
+    `Delivering to: ${address}`,
+    "",
+    `See your orders any time: ${ordersUrl}`
+  ].filter((line, index, all) => line !== "" || all[index - 1] !== "").join("\n");
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#1d1d1f;max-width:560px">
+      <p>Hi ${escapeHtml(order.customer.name || "there")},</p>
+      <h2 style="margin:0 0 8px">${copy.heading}</h2>
+      <p>${copy.body}</p>
+      ${tracking ? `<p><strong>${escapeHtml(tracking)}</strong></p>` : ""}
+      <p style="margin-top:20px"><strong>Order ${escapeHtml(order.id)}</strong></p>
+      <table style="width:100%;border-collapse:collapse">
+        ${order.items.map((item) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${escapeHtml(item.name)} &times; ${item.quantity}</td><td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right">${money(item.price * item.quantity)}</td></tr>`).join("")}
+        <tr><td style="padding:8px 0"><strong>Total</strong></td><td style="padding:8px 0;text-align:right"><strong>${money(order.total)}</strong></td></tr>
+      </table>
+      <p>Delivering to: ${escapeHtml(address)}</p>
+      <p><a href="${ordersUrl}">See your orders</a></p>
+    </div>`;
+  try {
+    await sendEmail({ to: email, subject: copy.subject(order), text, html });
+  } catch (error) {
+    console.error("Order email failed", order.id, kind, error.message);
   }
 }
 
@@ -549,7 +625,9 @@ function customerOrder(order) {
     createdAt: order.createdAt,
     dispatchedAt: order.dispatchedAt || null,
     deliveredAt: order.deliveredAt || null,
-    shipping: order.shipping
+    tracking: order.tracking || null,
+    shipping: order.shipping,
+    contact: { name: order.customer?.name || "", phone: order.customer?.phone || "" }
   };
 }
 
@@ -780,13 +858,18 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && /^\/api\/admin\/orders\/[^/]+\/status$/.test(url.pathname)) {
     const id = decodeURIComponent(url.pathname.split("/")[4]);
-    const { status } = await readBody(req);
+    const body = await readBody(req);
+    const { status } = body;
     if (!["dispatched", "delivered", "cancelled"].includes(status)) {
       return send(res, 400, { error: "Unknown order status." });
     }
+    const tracking = cleanText(body.tracking, "Tracking details", { max: 200 });
+    let newlyDispatched = false;
     const order = await updateJson(ordersFile, [], (orders) => {
       const match = orders.find((item) => item.id === id);
       if (!match) return null;
+      newlyDispatched = status === "dispatched" && match.status !== "dispatched";
+      if (status === "dispatched" && tracking) match.tracking = tracking;
       if (status !== "cancelled" && !["paid", "dispatched", "delivered"].includes(match.status)) {
         throw badRequest("Only paid orders can be dispatched or delivered.");
       }
@@ -795,6 +878,7 @@ async function handleApi(req, res, url) {
       return match;
     });
     if (!order) return send(res, 404, { error: "Order not found." });
+    if (newlyDispatched) await sendOrderEmail(order, "dispatched");
     return send(res, 200, order);
   }
 

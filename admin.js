@@ -78,6 +78,7 @@ function orderMarkup(order) {
       </div>
       <p>${order.createdAt ? dateFormat.format(new Date(order.createdAt)) : ""} &middot; ${money.format(order.total || 0)}${order.razorpayPaymentId ? ` &middot; Payment ${escapeHtml(order.razorpayPaymentId)}` : ""}</p>
       <p>${items}</p>
+      ${order.tracking ? `<p>Tracking: ${escapeHtml(order.tracking)}</p>` : ""}
       <p><strong>${escapeHtml(customer.name)}</strong> &middot; ${escapeHtml(customer.phone)} &middot; ${escapeHtml(customer.email)}</p>
       <p>${escapeHtml(shipping.address)}, ${escapeHtml(shipping.city)}, ${escapeHtml(shipping.state)} ${escapeHtml(shipping.pin)}</p>
       <div class="admin-order__actions">${orderActions(order)}</div>
@@ -291,9 +292,18 @@ ordersList.addEventListener("click", async (event) => {
       const order = await api(`/api/admin/orders/${encodeURIComponent(refresh.dataset.orderRefresh)}/refresh`, { method: "POST" });
       if (order.status === "payment_pending") alert("Razorpay has no completed payment for this order yet.");
     } else {
+      const status = statusButton.dataset.orderStatus;
+      let tracking = "";
+      if (status === "dispatched") {
+        tracking = window.prompt("Courier and tracking number (optional). The customer gets this in their dispatch email.", "");
+        if (tracking === null) {
+          button.disabled = false;
+          return;
+        }
+      }
       await api(`/api/admin/orders/${encodeURIComponent(statusButton.dataset.orderId)}/status`, {
         method: "POST",
-        body: JSON.stringify({ status: statusButton.dataset.orderStatus })
+        body: JSON.stringify({ status, tracking })
       });
     }
     renderOrders();

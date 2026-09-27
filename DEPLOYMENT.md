@@ -45,6 +45,7 @@ RAZORPAY_WEBHOOK_SECRET=use-the-secret-from-razorpay-webhook-settings
 RESEND_API_KEY=re_xxxxxxxxxxxxx
 EMAIL_FROM=Zenzo <orders@zenzo.org.in>
 GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+SITE_URL=https://zenzo.org.in
 ```
 
 `ADMIN_PASSWORD` and `SESSION_SECRET` are both required in production; admin
@@ -100,7 +101,22 @@ https://zenzo.org.in/api/webhooks/razorpay
 Use the same signing secret for the Vercel `RAZORPAY_WEBHOOK_SECRET` variable.
 The webhook rejects every request until that secret is set.
 
-## Customer Accounts
+## Checkout and Customer Accounts
+
+Checkout works as a guest: buyers never have to sign in. Signed-in buyers
+get their details filled in from their last order. After paying, guests are
+offered an account with their email already filled in.
+
+When Resend is set up (below), buyers also get emails:
+
+- **Order confirmed** – when payment is received.
+- **Dispatched** – when you press *Mark dispatched* in admin. The courier and
+  tracking number you enter there is included, and also shows on the
+  customer's *My orders* page.
+
+`SITE_URL` sets the link in those emails (defaults to `https://zenzo.org.in`).
+
+### Customer accounts
 
 Customers open **My orders** (`/account.html`) to see their paid orders.
 Orders are matched to the email address used at checkout.

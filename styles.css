@@ -4565,3 +4565,35 @@ body {
 .account-message:empty {
   display: none;
 }
+
+.checkout-account {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.checkout-account a {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.checkout-account .account-link {
+  display: inline;
+  margin-left: 6px;
+}
+
+.account-prompt {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 14px;
+  border: 1px solid rgba(47, 191, 113, 0.45);
+  border-radius: 8px;
+  background: rgba(47, 191, 113, 0.08);
+}
+
+.account-prompt p {
+  margin: 0;
+}

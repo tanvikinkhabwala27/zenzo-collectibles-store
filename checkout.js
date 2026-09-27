@@ -14,6 +14,8 @@ const money = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0
 });
 let paymentWindowOpen = false;
+let signedInEmail = null;
+const checkoutAccount = document.querySelector("#checkoutAccount");
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -52,8 +54,8 @@ function loadPendingOrder() {
   return null;
 }
 
-function savePendingOrder(order) {
-  localStorage.setItem(pendingKey, JSON.stringify({ ...order, cartKey: cartKey(), createdAt: Date.now() }));
+function savePendingOrder(order, email) {
+  localStorage.setItem(pendingKey, JSON.stringify({ ...order, email, cartKey: cartKey(), createdAt: Date.now() }));
 }
 
 function cartQuantity(id) {
@@ -98,7 +100,21 @@ function setBusy(busy) {
   payButton.textContent = busy ? "Processing..." : "Pay securely";
 }
 
+function accountPrompt(email) {
+  if (signedInEmail) return "";
+  const params = new URLSearchParams({ mode: "signup" });
+  if (email) params.set("email", email);
+  return `
+    <div class="account-prompt">
+      <strong>Track this order with a Zenzo account</strong>
+      <p class="checkout-note">See this order and future ones in one place${email ? ` using ${escapeHtml(email)}` : ""}. It only takes a minute.</p>
+      <a class="secondary-link" href="account.html?${params}">Create an account</a>
+    </div>
+  `;
+}
+
 function showConfirmation(order, { pendingConfirmation = false } = {}) {
+  const buyerEmail = loadPendingOrder()?.email || String(form.elements.email?.value || "").trim();
   localStorage.removeItem("dieCastGarageCart");
   localStorage.removeItem(pendingKey);
   cart.length = 0;
@@ -121,10 +137,11 @@ function showConfirmation(order, { pendingConfirmation = false } = {}) {
         ${order.total ? `<div class="checkout-total"><span>Paid</span><strong>${money.format(order.total)}</strong></div>` : ""}
         <p class="checkout-note">${pendingConfirmation
           ? "Your payment went through. Zenzo is finishing the confirmation and will contact you if anything else is needed."
-          : "Zenzo will pack and dispatch your order and keep you updated by email or phone."}</p>
+          : "Zenzo will pack and dispatch your order and keep you updated by email."}</p>
+        ${accountPrompt(buyerEmail)}
         <div class="checkout-nav__actions">
           <a class="primary-link" href="index.html#catalog">Continue shopping</a>
-          <a class="secondary-link" href="account.html">View my orders</a>
+          ${signedInEmail ? '<a class="secondary-link" href="account.html">View my orders</a>' : ""}
         </div>
       </div>
     </section>
@@ -264,7 +281,7 @@ form.addEventListener("submit", async (event) => {
           }
         })
       });
-      savePendingOrder(order);
+      savePendingOrder(order, String(formData.get("email") || "").trim().toLowerCase());
     }
     openRazorpay(order, formData);
   } catch (error) {
@@ -280,6 +297,36 @@ document.addEventListener("visibilitychange", () => {
   confirmIfPaid(loadPendingOrder());
 });
 
+function fillIfEmpty(name, value) {
+  const field = form.elements[name];
+  if (field && !field.value && value) field.value = value;
+}
+
+// Signing in is optional: it only fills in the buyer's details from their
+// most recent order so returning customers check out faster.
+async function loadAccount() {
+  try {
+    const { email } = await api("/api/account/me");
+    if (!email) return;
+    signedInEmail = email;
+    checkoutAccount.innerHTML = `Signed in as <strong>${escapeHtml(email)}</strong>. <button class="remove-button account-link" type="button" id="checkoutSignOut">Sign out</button>`;
+    fillIfEmpty("email", email);
+    const [latest] = await api("/api/account/orders");
+    if (!latest) return;
+    fillIfEmpty("name", latest.contact?.name);
+    fillIfEmpty("phone", latest.contact?.phone);
+    for (const key of ["address", "city", "state", "pin"]) fillIfEmpty(key, latest.shipping?.[key]);
+  } catch {
+    // Guest checkout keeps working without an account.
+  }
+}
+
+checkoutAccount.addEventListener("click", async (event) => {
+  if (!event.target.closest("#checkoutSignOut")) return;
+  await api("/api/account/logout", { method: "POST" }).catch(() => {});
+  window.location.reload();
+});
+
 async function init() {
   try {
     inventory = await api("/api/products");
@@ -287,9 +334,7 @@ async function init() {
     inventory = [];
   }
   renderCheckout();
-  api("/api/account/me").then(({ email }) => {
-    if (email && !form.elements.email.value) form.elements.email.value = email;
-  }).catch(() => {});
+  loadAccount();
   const pending = loadPendingOrder();
   if (pending) {
     checkoutNote.textContent = "Checking your last payment...";

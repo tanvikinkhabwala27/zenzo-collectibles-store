@@ -112,6 +112,7 @@ function orderMarkup(order) {
       <p>${steps}</p>
       <div class="order-list">${items}</div>
       <div class="checkout-total"><span>Total</span><strong>${money.format(order.total)}</strong></div>
+      ${order.tracking ? `<p><strong>Tracking:</strong> ${escapeHtml(order.tracking)}</p>` : ""}
       <p>Delivering to ${escapeHtml(shipping.city)}${shipping.pin ? ` ${escapeHtml(shipping.pin)}` : ""}</p>
     </article>
   `;
@@ -172,7 +173,14 @@ function setMode(mode) {
   showEmailStep();
 }
 
+const params = new URLSearchParams(window.location.search);
+const returnTo = params.get("next") === "checkout" ? "checkout.html" : null;
+
 async function signedIn(email) {
+  if (returnTo) {
+    window.location.href = returnTo;
+    return;
+  }
   signInMessage.textContent = "";
   passwordForm.reset();
   showEmailStep();
@@ -299,7 +307,17 @@ async function init() {
   }
   signInDivider.hidden = !(!passwordForm.hidden && config.googleClientId);
   signInUnavailable.hidden = Boolean(emailAccounts || config.googleClientId);
-  setMode(new URLSearchParams(window.location.search).get("mode") === "signup" && emailAccounts ? "signup" : "signin");
+  setMode(params.get("mode") === "signup" && emailAccounts ? "signup" : "signin");
+  const prefill = String(params.get("email") || "");
+  if (prefill) {
+    emailForm.elements.email.value = prefill;
+    passwordForm.elements.email.value = prefill;
+  }
+  if (returnTo) signInIntro.textContent = "Sign in to fill in your details, or go back and check out as a guest.";
+  if (me.email && returnTo) {
+    window.location.href = returnTo;
+    return;
+  }
   if (me.email) {
     showOrders(me.email);
   } else {
