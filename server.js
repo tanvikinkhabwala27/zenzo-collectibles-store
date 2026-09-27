@@ -631,6 +631,28 @@ function customerOrder(order) {
   };
 }
 
+// Corrections for products saved before they had the right collection. A fix
+// only applies while the collection is still unset, so later admin edits win.
+const productFixes = {
+  "admin-f1-stand-1783480383065": {
+    collection: "3D collectibles",
+    series: "Display Stands",
+    notes: "3D printed display stand for Formula 1 die-cast cars."
+  }
+};
+
+function applyProductFixes(products) {
+  let changed = false;
+  for (const product of products) {
+    const fix = productFixes[product.id];
+    if (fix && !product.collection) {
+      Object.assign(product, fix);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 async function handleAccountApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/account/config") {
     return send(res, 200, {
@@ -769,7 +791,17 @@ async function handleApi(req, res, url) {
   if (url.pathname.startsWith("/api/account/")) return handleAccountApi(req, res, url);
 
   if (req.method === "GET" && url.pathname === "/api/products") {
-    return send(res, 200, await readJson(productsFile, []));
+    const products = await readJson(productsFile, []);
+    if (applyProductFixes(products)) {
+      try {
+        await updateJson(productsFile, [], (latest) => {
+          applyProductFixes(latest);
+        });
+      } catch (error) {
+        console.error("Unable to save product fixes", error);
+      }
+    }
+    return send(res, 200, products);
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/login") {

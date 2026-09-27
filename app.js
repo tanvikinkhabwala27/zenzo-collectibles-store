@@ -409,10 +409,28 @@ function carMarkup(car) {
   `;
 }
 
+const collectionLabels = {
+  "Hot Wheels": "Hot Wheels",
+  Figurines: "figurines",
+  "3D collectibles": "3D prints",
+  Accessories: "accessories"
+};
+
+function emptyMessage() {
+  const query = state.query.trim();
+  const collection = state.collection === "all" ? "" : collectionLabels[state.collection] || state.collection;
+  const subcategory = state.subcategory === "all" ? "" : state.subcategory.toLowerCase();
+  const scope = subcategory || collection;
+  if (query) return `No ${scope || "products"} match "${query}". Try a different search.`;
+  if (scope) return `No ${scope} available right now. New pieces are added regularly, so check back soon.`;
+  return "No products to show right now. Check back soon.";
+}
+
 function renderProducts() {
   const cars = filteredInventory();
   productGrid.innerHTML = cars.map(carMarkup).join("");
   emptyState.hidden = cars.length > 0;
+  if (!cars.length) emptyState.textContent = emptyMessage();
   if (subcategoryBar) subcategoryBar.hidden = state.collection !== "Accessories";
 }
 
