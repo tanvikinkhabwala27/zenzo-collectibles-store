@@ -4597,3 +4597,45 @@ body {
 .account-prompt p {
   margin: 0;
 }
+
+.studio-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.studio-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: #2fbf71;
+}
+
+.studio-preview {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.studio-preview[hidden] {
+  display: none;
+}
+
+.studio-preview img {
+  width: min(260px, 100%);
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.studio-preview p {
+  margin: 0;
+}
+
+.studio-preview img.is-editable {
+  cursor: crosshair;
+}

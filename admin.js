@@ -110,35 +110,89 @@ function showLogin() {
   dashboard.hidden = true;
 }
 
-function resizeImage(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve("");
-      return;
-    }
+const preparedPhotos = new WeakMap();
+const studioNotes = {
+  studio: "Background removed and placed on the Zenzo stage. If any old background is left (for example inside a loop), tap it in the preview to remove it.",
+  "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. A photo on a plain background gives the best result.",
+  original: "Original photo, cropped square."
+};
 
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const maxSize = 1100;
-        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#f8f7f3";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+function showPreview(form, photo) {
+  const preview = form.querySelector(".studio-preview");
+  if (!preview) return;
+  preview.hidden = false;
+  preview.querySelector("img").src = photo.dataUrl;
+  preview.querySelector("img").classList.toggle("is-editable", Boolean(photo.canEdit));
+  preview.querySelector("p").textContent = studioNotes[photo.mode];
+  let reset = preview.querySelector(".studio-reset");
+  if (photo.canEdit && !reset) {
+    reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "remove-button account-link studio-reset";
+    reset.textContent = "Reset background removal";
+    preview.append(reset);
+  }
+  if (reset) reset.hidden = !photo.canEdit;
 }
+
+// Builds the photo for a form from its file input and studio switch, and
+// shows a preview so the admin sees exactly what will be saved.
+async function preparePhoto(form) {
+  const file = form.elements.image?.files[0];
+  const preview = form.querySelector(".studio-preview");
+  if (!file) {
+    preparedPhotos.delete(form);
+    if (preview) preview.hidden = true;
+    return null;
+  }
+  const job = window.zenzoStudio.createStudioPhoto(file, { studio: form.elements.studio?.checked !== false });
+  preparedPhotos.set(form, job);
+  if (preview) {
+    preview.hidden = false;
+    preview.querySelector("p").textContent = "Preparing photo...";
+  }
+  try {
+    const photo = await job;
+    if (preparedPhotos.get(form) === job) showPreview(form, photo);
+    return photo;
+  } catch (error) {
+    if (preview) preview.querySelector("p").textContent = error.message;
+    throw error;
+  }
+}
+
+async function photoFor(form) {
+  if (!form.elements.image?.files[0]) return "";
+  const photo = await (preparedPhotos.get(form) || preparePhoto(form));
+  return photo.dataUrl;
+}
+
+document.addEventListener("change", (event) => {
+  const form = event.target.closest("form");
+  if (form && (event.target.name === "image" || event.target.name === "studio")) {
+    preparePhoto(form).catch(() => {});
+  }
+});
+
+document.addEventListener("click", async (event) => {
+  const preview = event.target.closest(".studio-preview");
+  const form = preview?.closest("form");
+  const job = form && preparedPhotos.get(form);
+  if (!job) return;
+  const photo = await job;
+  if (!photo.canEdit) return;
+  if (event.target.closest(".studio-reset")) {
+    photo.reset();
+    showPreview(form, photo);
+    return;
+  }
+  const img = event.target.closest(".studio-preview img");
+  if (!img) return;
+  const box = img.getBoundingClientRect();
+  const removed = photo.removeAt((event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
+  showPreview(form, photo);
+  if (!removed) preview.querySelector("p").textContent = "Tap directly on the leftover background inside the product to remove it.";
+});
 
 async function renderProducts() {
   let products = [];
@@ -189,6 +243,18 @@ async function renderProducts() {
             Notes
             <textarea name="notes">${escapeHtml(product.notes)}</textarea>
           </label>
+          <label class="field field--full">
+            Replace photo (optional)
+            <input name="image" type="file" accept="image/*">
+          </label>
+          <label class="studio-toggle field--full">
+            <input name="studio" type="checkbox" checked>
+            Studio look, like the other product photos
+          </label>
+          <div class="studio-preview field--full" hidden>
+            <img alt="Preview of the new product photo">
+            <p class="checkout-note"></p>
+          </div>
           <button class="admin-order__action field--full" type="submit">Save changes</button>
         </form>
       </details>
@@ -219,7 +285,13 @@ productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(productForm);
   const name = String(form.get("name") || "").trim();
-  const image = await resizeImage(productForm.elements.image.files[0]);
+  let image = "";
+  try {
+    image = await photoFor(productForm);
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
 
   try {
     await api("/api/admin/products", {
@@ -238,6 +310,8 @@ productForm.addEventListener("submit", async (event) => {
       })
     });
     productForm.reset();
+    preparedPhotos.delete(productForm);
+    productForm.querySelector(".studio-preview").hidden = true;
     productForm.elements.collection.value = "Hot Wheels";
     productForm.elements.series.value = "Assorted Hot Wheels";
     productForm.elements.year.value = "2025";
@@ -254,12 +328,21 @@ productsList.addEventListener("submit", async (event) => {
   if (!editForm) return;
   event.preventDefault();
   const form = new FormData(editForm);
-  const button = editForm.querySelector("button");
+  const button = editForm.querySelector("button[type=submit]");
   button.disabled = true;
   try {
+    const changes = {
+      collection: form.get("collection"),
+      series: form.get("series"),
+      price: form.get("price"),
+      stock: form.get("stock"),
+      notes: form.get("notes")
+    };
+    const image = await photoFor(editForm);
+    if (image) changes.image = image;
     await api(`/api/admin/products/${encodeURIComponent(editForm.dataset.edit)}`, {
       method: "PATCH",
-      body: JSON.stringify(Object.fromEntries(form))
+      body: JSON.stringify(changes)
     });
     renderProducts();
   } catch (error) {

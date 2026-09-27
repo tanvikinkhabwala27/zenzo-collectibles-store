@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-41">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-43">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -83,6 +83,14 @@
                 Product photo
                 <input name="image" type="file" accept="image/*">
               </label>
+              <label class="studio-toggle field--full">
+                <input name="studio" type="checkbox" checked>
+                Studio look: dark stage with red and blue lighting, like the other product photos
+              </label>
+              <div class="studio-preview field--full" hidden>
+                <img alt="Preview of the product photo">
+                <p class="checkout-note"></p>
+              </div>
               <label class="field field--full">
                 Notes
                 <textarea name="notes" required>Sealed Hot Wheels pack photographed from available stock.</textarea>
@@ -123,6 +131,7 @@
       </div>
     </main>
 
-    <script src="admin.js?v=zenzo-race-theme-33"></script>
+    <script src="admin-studio.js?v=zenzo-race-theme-35"></script>
+    <script src="admin.js?v=zenzo-race-theme-35"></script>
   </body>
 </html>

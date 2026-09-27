@@ -369,7 +369,7 @@ function carMarkup(car) {
   const displayImage = showcaseImage || car.image;
   const imageSrc = displayImage && displayImage.startsWith("data:") ? displayImage : `${displayImage}?v=${assetVersion}`;
   const detailsHref = `product.html?id=${encodeURIComponent(car.id)}`;
-  const isStudioImage = displayImage?.includes("assets/accessories/");
+  const isStudioImage = displayImage?.includes("assets/accessories/") || displayImage?.startsWith("data:image/");
   const imageClass = showcaseImage || isStudioImage ? "product-photo product-photo--showcase" : "product-photo";
   const imageAlt = showcaseImage ? `Unboxed showcase view of ${car.name}` : car.imageAlt || car.name;
   const media = displayImage ? `<img class="${imageClass}" src="${imageSrc}" alt="${imageAlt}" onerror="this.hidden = true; this.nextElementSibling.hidden = false;"><span class="photo-fallback" hidden>Photo unavailable</span>` : `

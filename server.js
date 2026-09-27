@@ -37,7 +37,7 @@ const maxCodeAttempts = 5;
 
 const maxPublicBodyBytes = 64 * 1024;
 const maxAdminBodyBytes = 4 * 1024 * 1024;
-const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js", "account.js", "showcase-images.js"]);
+const publicScripts = new Set(["app.js", "product.js", "checkout.js", "admin.js", "account.js", "admin-studio.js", "showcase-images.js"]);
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -887,6 +887,7 @@ async function handleApi(req, res, url) {
       stock: Math.max(0, Math.round(Number(body.stock) || 0)),
       notes: cleanText(body.notes, "Notes", { max: 2000 })
     };
+    if (body.image) changes.image = cleanImage(body.image);
     const product = await updateJson(productsFile, [], (products) => {
       const match = products.find((item) => item.id === id);
       if (match) Object.assign(match, changes);
