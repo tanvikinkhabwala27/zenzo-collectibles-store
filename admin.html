@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
     <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-41">
@@ -29,7 +30,7 @@
               <input type="password" name="password" autocomplete="current-password" required>
             </label>
             <button class="place-order field--full" type="submit">Log in</button>
-            <p class="checkout-note field--full" id="loginMessage">Admin email: <strong>zenzo.org@gmail.com</strong></p>
+            <p class="checkout-note field--full" id="loginMessage" role="status" aria-live="polite"></p>
           </form>
         </div>
       </section>
@@ -122,6 +123,6 @@
       </div>
     </main>
 
-    <script src="admin.js?v=zenzo-race-theme-31"></script>
+    <script src="admin.js?v=zenzo-race-theme-32"></script>
   </body>
 </html>

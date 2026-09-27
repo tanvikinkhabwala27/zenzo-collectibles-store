@@ -806,7 +806,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/admin/login") {
     if (!adminConfigured()) {
-      return send(res, 503, { error: "Admin login is not configured." });
+      return send(res, 503, { error: "Admin login isn't set up yet. Add ADMIN_PASSWORD and SESSION_SECRET in Vercel, then redeploy." });
     }
     const body = await readBody(req);
     const email = String(body.email || "").trim().toLowerCase();
