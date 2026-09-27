@@ -2,7 +2,16 @@
 // matches the storefront showcase photos: the product on a dark stage with a
 // red glow on the left, a blue glow on the right and a glossy floor.
 (function () {
-  const size = 900;
+  const size = 1200;
+  const workingSize = 1600;
+  const quality = 0.9;
+
+  function context(canvas, options) {
+    const ctx = canvas.getContext("2d", options);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    return ctx;
+  }
 
   function loadImage(file) {
     return new Promise((resolve, reject) => {
@@ -103,13 +112,13 @@
   // Prepares a working copy of the photo and removes a plain background by
   // flooding in from the edges. Returns null when the edges are too busy.
   function prepareCutOut(img) {
-    const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+    const scale = Math.min(1, workingSize / Math.max(img.width, img.height));
     const width = Math.max(1, Math.round(img.width * scale));
     const height = Math.max(1, Math.round(img.height * scale));
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const ctx = context(canvas, { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, width, height);
     const data = ctx.getImageData(0, 0, width, height).data;
     const state = { width, height, data, background: new Uint8Array(width * height) };
@@ -122,9 +131,85 @@
     const plain = border.filter((p) => distance(data, p * 4, ...backdrop) < 60).length / border.length;
     if (plain < 0.75) return null;
 
-    const removed = flood(state, border, backdrop, 60);
+    let removed = flood(state, border, backdrop, 60);
+    removed += removeEnclosedBackdrop(state, backdrop);
     if (removed < width * height * 0.08 || removed > width * height * 0.95) return null;
+    cleanEdges(state, backdrop);
     return state;
+  }
+
+  // Backdrop showing through enclosed gaps (inside a loop track, between
+  // parts) cannot be reached from the photo's edges. Remove sizeable patches
+  // that are flat and almost exactly the backdrop colour; shaded product
+  // surfaces such as white packaging vary too much to qualify.
+  function removeEnclosedBackdrop(state, [r, g, b]) {
+    const { data, background, width } = state;
+    const total = background.length;
+    const seen = new Uint8Array(total);
+    const minPatch = total * 0.002;
+    let removed = 0;
+    for (let start = 0; start < total; start += 1) {
+      if (background[start] || seen[start] || distance(data, start * 4, r, g, b) >= 24) continue;
+      const patch = [start];
+      seen[start] = 1;
+      let sum = 0;
+      let sumSquares = 0;
+      for (let k = 0; k < patch.length; k += 1) {
+        const p = patch[k];
+        const light = data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2];
+        sum += light;
+        sumSquares += light * light;
+        for (const n of neighbours(p, width, total)) {
+          if (seen[n] || background[n] || distance(data, n * 4, r, g, b) >= 24) continue;
+          seen[n] = 1;
+          patch.push(n);
+        }
+      }
+      const mean = sum / patch.length;
+      const spread = Math.sqrt(Math.max(0, sumSquares / patch.length - mean * mean)) / 3;
+      if (patch.length >= minPatch && spread < 6) {
+        for (const p of patch) background[p] = 1;
+        removed += patch.length;
+      }
+    }
+    return removed;
+  }
+
+  // Removes the light halo of old backdrop that clings to cut edges.
+  function cleanEdges(state, [r, g, b]) {
+    const { data, background, width, height } = state;
+    for (let pass = 0; pass < 2; pass += 1) {
+      const strip = [];
+      for (let p = 0; p < background.length; p += 1) {
+        if (background[p]) continue;
+        const x = p % width;
+        const y = Math.floor(p / width);
+        const edge = (x > 0 && background[p - 1]) || (x < width - 1 && background[p + 1])
+          || (y > 0 && background[p - width]) || (y < height - 1 && background[p + width]);
+        if (edge && distance(data, p * 4, r, g, b) < 90) strip.push(p);
+      }
+      for (const p of strip) background[p] = 1;
+    }
+  }
+
+  // Unsharp mask on the scaled product so fine detail stays crisp.
+  function sharpen(canvas, amount) {
+    const ctx = context(canvas, { willReadFrequently: true });
+    const { width, height } = canvas;
+    const pixels = ctx.getImageData(0, 0, width, height);
+    const src = new Uint8ClampedArray(pixels.data);
+    const out = pixels.data;
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const i = (y * width + x) * 4;
+        if (src[i + 3] < 200) continue;
+        for (let c = 0; c < 3; c += 1) {
+          const around = src[i - 4 + c] + src[i + 4 + c] + src[i - width * 4 + c] + src[i + width * 4 + c];
+          out[i + c] = src[i + c] * (1 + 4 * amount) - around * amount;
+        }
+      }
+    }
+    ctx.putImageData(pixels, 0, 0);
   }
 
   function productCanvas(state) {
@@ -145,7 +230,7 @@
         // Soften the cut edge so the product blends into the stage.
         const edge = (x > 0 && background[p - 1]) || (x < width - 1 && background[p + 1])
           || (y > 0 && background[p - width]) || (y < height - 1 && background[p + width]);
-        if (edge) out[p * 4 + 3] = 150;
+        if (edge) out[p * 4 + 3] = 170;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -156,11 +241,11 @@
     const full = document.createElement("canvas");
     full.width = width;
     full.height = height;
-    full.getContext("2d").putImageData(pixels, 0, 0);
+    context(full).putImageData(pixels, 0, 0);
     const trimmed = document.createElement("canvas");
     trimmed.width = maxX - minX + 1;
     trimmed.height = maxY - minY + 1;
-    trimmed.getContext("2d").drawImage(full, minX, minY, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+    context(trimmed).drawImage(full, minX, minY, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
     return { canvas: trimmed, minX, minY };
   }
 
@@ -175,6 +260,13 @@
     const x = (size - width) / 2;
     const baseline = size * 0.74;
     const y = baseline - height;
+    const scaled = document.createElement("canvas");
+    scaled.width = Math.max(1, Math.round(width));
+    scaled.height = Math.max(1, Math.round(height));
+    const scaledCtx = context(scaled);
+    scaledCtx.filter = "contrast(1.06) saturate(1.08)";
+    scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
+    sharpen(scaled, scale < 1 ? 0.35 : 0.55);
 
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
@@ -189,7 +281,7 @@
     ctx.globalAlpha = 0.22;
     ctx.translate(0, baseline * 2);
     ctx.scale(1, -1);
-    ctx.drawImage(image, x, y, width, height);
+    ctx.drawImage(scaled, x, y, width, height);
     ctx.restore();
     const fade = ctx.createLinearGradient(0, baseline, 0, baseline + height * 0.6);
     fade.addColorStop(0, "rgba(4, 6, 9, 0.2)");
@@ -197,7 +289,7 @@
     ctx.fillStyle = fade;
     ctx.fillRect(0, baseline, size, size - baseline);
 
-    ctx.drawImage(image, x, y, width, height);
+    ctx.drawImage(scaled, x, y, width, height);
     vignette(ctx);
     return { x, y, scale, minX: product.minX, minY: product.minY };
   }
@@ -238,12 +330,12 @@
   async function createStudioPhoto(file, { studio = true } = {}) {
     const img = await loadImage(file);
     const canvas = newCanvas();
-    const ctx = canvas.getContext("2d");
+    const ctx = context(canvas);
     const photo = { mode: "original", canEdit: false, dataUrl: "" };
 
     if (!studio) {
       composeOriginal(ctx, img);
-      photo.dataUrl = canvas.toDataURL("image/jpeg", 0.86);
+      photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
       return photo;
     }
 
@@ -252,7 +344,7 @@
     if (!product) {
       composeFullPhoto(ctx, img);
       photo.mode = "studio-photo";
-      photo.dataUrl = canvas.toDataURL("image/jpeg", 0.86);
+      photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
       return photo;
     }
 
@@ -261,14 +353,14 @@
     let placement = composeCutOut(ctx, product);
     photo.mode = "studio";
     photo.canEdit = true;
-    photo.dataUrl = canvas.toDataURL("image/jpeg", 0.86);
+    photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
 
     const render = () => {
       const current = productCanvas(state);
       if (!current) return false;
       const fresh = newCanvas();
-      placement = composeCutOut(fresh.getContext("2d"), current);
-      photo.dataUrl = fresh.toDataURL("image/jpeg", 0.86);
+      placement = composeCutOut(context(fresh), current);
+      photo.dataUrl = fresh.toDataURL("image/jpeg", quality);
       return true;
     };
 
