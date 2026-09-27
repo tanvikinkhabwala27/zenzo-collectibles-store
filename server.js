@@ -190,6 +190,21 @@ function storageNotConfigured() {
 
 // Read-modify-write that never overwrites a concurrent change: blob writes
 // are conditional on the ETag that was read, and retried on conflict.
+function isPreconditionFailure(error, BlobPreconditionFailedError) {
+  return (BlobPreconditionFailedError && error instanceof BlobPreconditionFailedError)
+    || error?.constructor?.name === "BlobPreconditionFailedError";
+}
+
+async function currentBlobEtag(head, pathname) {
+  try {
+    return (await head(pathname)).etag;
+  } catch {
+    return null;
+  }
+}
+
+// Read-modify-write that avoids overwriting a concurrent change: blob writes
+// are conditional on the ETag from the Blob API, and retried on conflict.
 async function updateJson(file, fallback, mutate) {
   if (!usesBlobStorage) {
     if (isVercel) throw storageNotConfigured();
@@ -199,25 +214,40 @@ async function updateJson(file, fallback, mutate) {
     return result;
   }
 
-  const { put, BlobPreconditionFailedError } = await getBlobClient();
+  const { put, head, BlobPreconditionFailedError } = await getBlobClient();
+  const pathname = blobPath(file);
+  const writeOptions = {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    cacheControlMaxAge: 60,
+    contentType: "application/json"
+  };
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data, etag } = await readBlobEntry(file, fallback, { fresh: true });
+    // Take the ETag from the Blob API before reading, so a change made after
+    // this point makes the conditional write fail instead of being lost.
+    let etag = await currentBlobEtag(head, pathname);
+    const entry = await readBlobEntry(file, fallback, { fresh: true });
+    etag ||= entry.etag;
+    const data = entry.data;
     const result = await mutate(data);
     try {
-      await put(blobPath(file), JSON.stringify(data, null, 2), {
-        access: "private",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        ifMatch: etag,
-        cacheControlMaxAge: 60,
-        contentType: "application/json"
-      });
+      await put(pathname, JSON.stringify(data, null, 2), { ...writeOptions, ifMatch: etag });
       return result;
     } catch (error) {
-      if (!(error instanceof BlobPreconditionFailedError)) throw error;
+      if (!isPreconditionFailure(error, BlobPreconditionFailedError)) throw error;
+      // If the blob has not changed, the ETag check itself is failing; write
+      // directly rather than failing every save.
+      if (await currentBlobEtag(head, pathname) === etag) {
+        console.warn("Blob conditional write rejected an unchanged ETag; writing directly", pathname);
+        await put(pathname, JSON.stringify(data, null, 2), writeOptions);
+        return result;
+      }
     }
   }
-  throw new Error("Storage is busy. Please try again.");
+  const error = new Error("Storage is busy. Please try again.");
+  error.statusCode = 503;
+  throw error;
 }
 
 async function copyIfMissing(source, destination, fallback) {
@@ -1081,7 +1111,12 @@ async function handleRequest(req, res) {
     const status = Number(error.statusCode) || 500;
     if (status >= 500) console.error(error);
     if (res.headersSent) return res.end();
-    send(res, status, { error: status >= 500 && !error.statusCode ? "Something went wrong. Please try again." : error.message });
+    // Signed-in admins see the real cause so problems can be diagnosed.
+    const showDetails = verifySession(req);
+    const message = status >= 500 && !error.statusCode && !showDetails
+      ? "Something went wrong. Please try again."
+      : error.message || "Something went wrong. Please try again.";
+    send(res, status, { error: message });
   }
 }
 
