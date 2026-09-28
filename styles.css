@@ -4952,3 +4952,63 @@ button.admin-stat:hover {
 .studio-preview.is-low-res p {
   color: #f5b83d;
 }
+
+/* Powered by TK Studios credit */
+.footer-credit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  align-items: center;
+  justify-content: center;
+  width: min(1180px, calc(100% - 32px));
+  margin: 28px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-credit__label,
+.footer-credit__name {
+  font-size: 0.82rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+}
+
+.footer-credit__label {
+  color: rgba(219, 234, 254, 0.62);
+}
+
+.site-footer .footer-credit__link {
+  display: inline-flex;
+  gap: 18px;
+  align-items: center;
+  margin: 0;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.site-footer .footer-credit__link:hover,
+.site-footer .footer-credit__link:focus-visible {
+  color: #e8914a;
+  text-decoration: none;
+}
+
+.footer-credit__mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(232, 145, 74, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.footer-credit__link:hover .footer-credit__mark,
+.footer-credit__link:focus-visible .footer-credit__mark {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 1px #e8914a, 0 6px 20px rgba(232, 145, 74, 0.28);
+}
+
+@media (max-width: 520px) {
+  .footer-credit__label,
+  .footer-credit__name {
+    letter-spacing: 0.3em;
+  }
+}
