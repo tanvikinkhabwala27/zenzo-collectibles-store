@@ -4959,7 +4959,7 @@ button.admin-stat:hover {
   flex-wrap: wrap;
   gap: 14px 22px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   width: min(1180px, calc(100% - 32px));
   margin: 28px auto 0;
   padding-top: 24px;
