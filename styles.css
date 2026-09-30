@@ -5012,3 +5012,19 @@ button.admin-stat:hover {
     letter-spacing: 0.3em;
   }
 }
+
+/* Private preview password page */
+.access-page .checkout-shell {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+}
+
+.access-panel {
+  max-width: 460px;
+}
+
+.access-logo {
+  width: 150px;
+  height: auto;
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Private preview | Zenzo</title>
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-48">
+  </head>
+  <body class="checkout-page access-page">
+    <main class="checkout-shell">
+      <section class="checkout-panel account-panel access-panel" aria-labelledby="accessTitle">
+        <div class="checkout-panel__body">
+          <img src="assets/zenzo-logo-mark.png" alt="Zenzo" class="access-logo" width="520" height="138">
+          <div>
+            <p class="eyebrow">Private preview</p>
+            <h1 id="accessTitle">Enter the password</h1>
+            <p class="checkout-note">Zenzo is open by invitation right now. Use the password you were given.</p>
+          </div>
+          <form class="form-grid" id="accessForm">
+            <label class="field field--full">
+              Password
+              <input name="password" type="password" autocomplete="current-password" required autofocus>
+            </label>
+            <button class="place-order field--full" type="submit">Enter the shop</button>
+            <p class="checkout-note field--full" id="accessMessage" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const accessForm = document.querySelector("#accessForm");
+      const accessMessage = document.querySelector("#accessMessage");
+      accessForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = accessForm.querySelector("button");
+        button.disabled = true;
+        accessMessage.textContent = "Checking...";
+        try {
+          const response = await fetch("/api/access", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              password: new FormData(accessForm).get("password"),
+              next: new URLSearchParams(window.location.search).get("next") || "/"
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Please try again.");
+          window.location.href = data.next;
+        } catch (error) {
+          accessMessage.textContent = error.message;
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

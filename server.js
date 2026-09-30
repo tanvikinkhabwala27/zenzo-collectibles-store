@@ -28,8 +28,22 @@ const config = {
   resendApiKey: process.env.RESEND_API_KEY || "",
   emailFrom: process.env.EMAIL_FROM || "",
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
-  siteUrl: (process.env.SITE_URL || "https://zenzo.org.in").replace(/\/$/, "")
+  siteUrl: (process.env.SITE_URL || "https://zenzo.org.in").replace(/\/$/, ""),
+  sitePassword: process.env.SITE_PASSWORD || ""
 };
+
+// While SITE_PASSWORD is set the whole shop is private. These paths stay
+// reachable so visitors can unlock it and Razorpay can still report payments.
+// middleware.js applies the same rule on Vercel, where static files never
+// reach this server.
+const openPaths = new Set([
+  "/access.html",
+  "/api/access",
+  "/api/webhooks/razorpay",
+  "/styles.css",
+  "/assets/zenzo-logo-mark.png"
+]);
+const accessDays = 30;
 
 const customerSessionDays = 30;
 const loginCodeMinutes = 10;
@@ -115,6 +129,23 @@ function customerCookie(email) {
   const maxAge = customerSessionDays * 24 * 60 * 60;
   const token = makeToken({ kind: "customer", email, exp: Date.now() + maxAge * 1000 });
   return `zenzo_customer=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${isVercel ? "; Secure" : ""}`;
+}
+
+// Ties access cookies to the current password, so changing SITE_PASSWORD
+// signs everyone out.
+function accessVersion() {
+  return crypto.createHash("sha256").update(`access:${config.sitePassword}`).digest("hex").slice(0, 16);
+}
+
+function hasSiteAccess(req) {
+  if (!config.sitePassword) return true;
+  const data = readToken(parseCookies(req).zenzo_access);
+  return data?.kind === "access" && data.v === accessVersion();
+}
+
+function safeNext(value) {
+  const next = String(value || "/");
+  return next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
 }
 
 function customerEmail(req) {
@@ -818,6 +849,20 @@ async function handleAccountApi(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "POST" && url.pathname === "/api/access") {
+    if (!config.sitePassword) return send(res, 200, { ok: true, next: "/" });
+    if (!config.sessionSecret) return send(res, 503, { error: "Private access is not set up yet." });
+    const body = await readBody(req);
+    if (!safeEqual(String(body.password || ""), config.sitePassword)) {
+      return send(res, 401, { error: "That password is not right." });
+    }
+    const maxAge = accessDays * 24 * 60 * 60;
+    const token = makeToken({ kind: "access", v: accessVersion(), exp: Date.now() + maxAge * 1000 });
+    return send(res, 200, { ok: true, next: safeNext(body.next) }, {
+      "set-cookie": `zenzo_access=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${isVercel ? "; Secure" : ""}`
+    });
+  }
+
   if (url.pathname.startsWith("/api/account/")) return handleAccountApi(req, res, url);
 
   if (req.method === "GET" && url.pathname === "/api/products") {
@@ -1105,6 +1150,12 @@ async function serveStatic(req, res, url) {
 async function handleRequest(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
+    if (!openPaths.has(url.pathname) && !hasSiteAccess(req)) {
+      if (url.pathname.startsWith("/api/")) return send(res, 401, { error: "This shop is private." });
+      const next = encodeURIComponent(`${url.pathname}${url.search}`);
+      res.writeHead(302, { ...securityHeaders, location: `/access.html?next=${next}`, "cache-control": "no-store" });
+      return res.end();
+    }
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url);
     } else {

@@ -153,6 +153,22 @@ up.
 
 Redeploy after adding these variables.
 
+## Private Preview (password lock)
+
+Set `SITE_PASSWORD` in Vercel (Production) and redeploy to make the whole shop
+private. Visitors see a password page first and stay signed in for 30 days on
+that device. `SESSION_SECRET` must also be set.
+
+- Change `SITE_PASSWORD` to sign everyone out; share the new one with the
+  people who should keep access.
+- Delete `SITE_PASSWORD` and redeploy to open the shop to the public again.
+- Razorpay webhooks still reach the site while it is locked. Admin keeps its
+  own login on top of the shared password.
+
+On Vercel the lock is enforced by `middleware.js`, because static pages are
+served without reaching `server.js`; `server.js` applies the same rule for
+local and other hosting.
+
 ## Local Development
 
 ```bash
