@@ -337,6 +337,142 @@ document.addEventListener("change", (event) => {
   }
 });
 
+async function fileFromUrl(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("A product photo could not be loaded.");
+  const blob = await response.blob();
+  return new File([blob], "current-photo.jpg", { type: blob.type || "image/jpeg" });
+}
+
+// Bulk studio look: runs every product photo that does not have the dark
+// studio look yet through the tool, then lets the admin review and save.
+const bulkStudio = document.querySelector("#bulkStudio");
+let bulkResults = [];
+
+function renderBulkReview() {
+  if (!bulkResults.length) {
+    bulkStudio.innerHTML = '<p class="checkout-note">Every product photo already has the studio look. To add red accents to one, use Edit, then "Or edit the current photo".</p>';
+    return;
+  }
+  const selected = bulkResults.filter((item) => item.include).length;
+  bulkStudio.innerHTML = `
+    <div class="admin-orders-head">
+      <div>
+        <h2>Review ${bulkResults.length} ${bulkResults.length === 1 ? "photo" : "photos"}</h2>
+        <p class="checkout-note">Pick Standard or Red accent for each, untick any to leave as they are, then save.</p>
+      </div>
+      <button class="remove-button account-link" type="button" data-bulk-cancel>Cancel</button>
+    </div>
+    <div class="bulk-studio__list">
+      ${bulkResults.map((item, index) => `
+        <article class="bulk-studio__item${item.include ? "" : " is-skipped"}">
+          <label class="bulk-studio__include">
+            <input type="checkbox" data-bulk-include="${index}" ${item.include ? "checked" : ""}>
+            <strong>${escapeHtml(productLabel(item.product))}</strong>
+          </label>
+          <div class="bulk-studio__photos">
+            <figure><img src="${escapeHtml(item.url)}" alt=""><figcaption>Now</figcaption></figure>
+            ${["standard", "accent"].map((variant) => `
+              <button class="studio-choice${item.photo.choice === variant ? " is-selected" : ""}" type="button" data-bulk-item="${index}" data-bulk-choice="${variant}" aria-pressed="${item.photo.choice === variant}">
+                <img src="${item.photo.variants[variant]}" alt="">
+                <span>${variant === "accent" ? "Red accent" : "Standard"}</span>
+              </button>
+            `).join("")}
+          </div>
+        </article>
+      `).join("")}
+    </div>
+    <button class="place-order" type="button" data-bulk-save ${selected ? "" : "disabled"}>Save ${selected} selected ${selected === 1 ? "photo" : "photos"}</button>
+  `;
+}
+
+async function runBulkStudio() {
+  const button = document.querySelector("#bulkStudioButton");
+  button.disabled = true;
+  bulkStudio.hidden = false;
+  bulkResults = [];
+  bulkStudio.innerHTML = '<p class="checkout-note">Checking photos...</p>';
+  try {
+    const products = await api("/api/products");
+    knownProducts = products;
+    for (const [index, product] of products.entries()) {
+      bulkStudio.innerHTML = `<p class="checkout-note">Checking photo ${index + 1} of ${products.length}: ${escapeHtml(productLabel(product))}...</p>`;
+      const url = currentPhotoUrl(product);
+      if (!url) continue;
+      try {
+        const photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), { studio: true });
+        // Photos that already have the dark studio look are left alone.
+        if (photo.mode !== "restyle" && photo.variants) bulkResults.push({ product, url, photo, include: true });
+      } catch {
+        // Skip photos that cannot be read.
+      }
+    }
+    renderBulkReview();
+  } catch (error) {
+    bulkStudio.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveBulkStudio(button) {
+  const chosen = bulkResults.filter((item) => item.include);
+  button.disabled = true;
+  let saved = 0;
+  const failed = [];
+  for (const item of chosen) {
+    button.textContent = `Saving ${saved + 1} of ${chosen.length}...`;
+    const { product } = item;
+    try {
+      await api(`/api/admin/products/${encodeURIComponent(product.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          collection: product.collection || "Hot Wheels",
+          series: product.series || "Assorted Hot Wheels",
+          price: product.price,
+          stock: product.stock,
+          notes: product.notes || "",
+          image: item.photo.dataUrl
+        })
+      });
+      saved += 1;
+    } catch (error) {
+      failed.push(`${productLabel(product)}: ${error.message}`);
+    }
+  }
+  bulkResults = [];
+  bulkStudio.hidden = true;
+  productsMessage.textContent = failed.length
+    ? `Saved ${saved} ${saved === 1 ? "photo" : "photos"}. Not saved: ${failed.join("; ")}`
+    : `Saved ${saved} ${saved === 1 ? "photo" : "photos"} with the studio look.`;
+  renderProducts();
+}
+
+document.querySelector("#bulkStudioButton").addEventListener("click", runBulkStudio);
+
+bulkStudio.addEventListener("click", (event) => {
+  const choice = event.target.closest("[data-bulk-choice]");
+  if (choice) {
+    bulkResults[Number(choice.dataset.bulkItem)].photo.choice = choice.dataset.bulkChoice;
+    renderBulkReview();
+    return;
+  }
+  if (event.target.closest("[data-bulk-cancel]")) {
+    bulkResults = [];
+    bulkStudio.hidden = true;
+    return;
+  }
+  const save = event.target.closest("[data-bulk-save]");
+  if (save) saveBulkStudio(save);
+});
+
+bulkStudio.addEventListener("change", (event) => {
+  const include = event.target.closest("[data-bulk-include]");
+  if (!include) return;
+  bulkResults[Number(include.dataset.bulkInclude)].include = include.checked;
+  renderBulkReview();
+});
+
 // Runs the product's existing photo through the studio tool, as if it had
 // been chosen with Replace photo.
 document.addEventListener("click", async (event) => {

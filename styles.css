@@ -5173,3 +5173,86 @@ button.admin-stat:hover {
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 50%;
 }
+
+/* Bulk studio look review */
+.admin-products-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.bulk-studio {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(9, 14, 22, 0.6);
+}
+
+.bulk-studio[hidden] {
+  display: none;
+}
+
+.bulk-studio h2 {
+  margin: 0;
+}
+
+.bulk-studio__list {
+  display: grid;
+  gap: 14px;
+}
+
+.bulk-studio__item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.bulk-studio__item.is-skipped {
+  opacity: 0.5;
+}
+
+.bulk-studio__include {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.bulk-studio__include input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2fbf71;
+}
+
+.bulk-studio__photos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 150px));
+  gap: 10px;
+}
+
+.bulk-studio__photos figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.bulk-studio__photos figure img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+@media (max-width: 520px) {
+  .bulk-studio__photos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

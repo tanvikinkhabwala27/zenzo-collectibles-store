@@ -472,8 +472,10 @@
     const sampleCtx = context(sample, { willReadFrequently: true });
     sampleCtx.drawImage(img, 0, 0, 64, 64);
     const { data } = sampleCtx.getImageData(0, 0, 64, 64);
+    // The top edge is dark in every studio-look photo (the side lights and
+    // the table make the other edges brighter), and bright in wall photos.
     const edge = [];
-    for (let i = 0; i < 64; i += 1) edge.push(i, 63 * 64 + i, i * 64, i * 64 + 63);
+    for (let i = 8; i < 56; i += 1) edge.push(i, 64 + i);
     const light = edge.map((p) => data[p * 4] * 0.299 + data[p * 4 + 1] * 0.587 + data[p * 4 + 2] * 0.114)
       .sort((a, b) => a - b);
     return light[Math.floor(light.length / 2)] < 45;
