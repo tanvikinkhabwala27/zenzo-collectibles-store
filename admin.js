@@ -248,7 +248,8 @@ const preparedPhotos = new WeakMap();
 const studioNotes = {
   studio: "Background removed and placed on the Zenzo stage. Pick Standard or Red accent under the large preview. If any old background is left (for example inside a loop), tap it in the large preview to remove it.",
   "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. Pick Standard or Red accent under the large preview. A photo on a plain background gives the best result.",
-  original: "Original photo, cropped square."
+  original: "Original photo, cropped square.",
+  restyle: "This photo already has a dark studio background, so it is kept as it is. Standard leaves it unchanged; Red accent adds red and blue lighting."
 };
 
 function showPreview(form, photo) {
@@ -336,6 +337,29 @@ document.addEventListener("change", (event) => {
   }
 });
 
+// Runs the product's existing photo through the studio tool, as if it had
+// been chosen with Replace photo.
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-reedit]");
+  if (!button) return;
+  const form = button.closest("form");
+  button.disabled = true;
+  try {
+    const response = await fetch(button.dataset.reedit);
+    if (!response.ok) throw new Error("The current photo could not be loaded.");
+    const blob = await response.blob();
+    const file = new File([blob], "current-photo.jpg", { type: blob.type || "image/jpeg" });
+    const files = new DataTransfer();
+    files.items.add(file);
+    form.elements.image.files = files.files;
+    form.elements.image.dispatchEvent(new Event("change", { bubbles: true }));
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 document.addEventListener("click", async (event) => {
   const preview = event.target.closest(".studio-preview");
   const form = preview?.closest("form");
@@ -363,6 +387,12 @@ document.addEventListener("click", async (event) => {
 });
 
 let knownProducts = [];
+
+// The photo shoppers currently see for a product.
+function currentPhotoUrl(product) {
+  if (product.image?.startsWith("data:")) return product.image;
+  return (window.zenzoShowcaseImages || {})[product.id] || product.image || "";
+}
 
 function productLabel(product) {
   return product.colorName ? `${product.name} – ${product.colorName}` : product.name;
@@ -412,7 +442,7 @@ async function renderProducts() {
     const collection = product.collection || "Hot Wheels";
     return `
     <div class="admin-product">
-      ${product.image ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">` : ""}
+      ${currentPhotoUrl(product) ? `<img src="${escapeHtml(currentPhotoUrl(product))}" alt="${escapeHtml(product.name)}">` : ""}
       <div>
         <h3>${escapeHtml(product.name)}${product.colorName ? ` <span class="admin-colour"><span class="admin-colour__dot" style="background: ${escapeHtml(product.colorHex || "#8a8f98")}"></span>${escapeHtml(product.colorName)}</span>` : ""}</h3>
         <p>${escapeHtml(collection)} &middot; ${escapeHtml(product.series)} &middot; ${money.format(product.price)} &middot; Stock ${product.stock}</p>
@@ -459,6 +489,7 @@ async function renderProducts() {
             Replace photo (optional)
             <input name="image" type="file" accept="image/*">
           </label>
+          ${currentPhotoUrl(product) ? `<button class="remove-button account-link field--full" type="button" data-reedit="${escapeHtml(currentPhotoUrl(product))}">Or edit the current photo (Standard / Red accent)</button>` : ""}
           <label class="studio-toggle field--full">
             <input name="studio" type="checkbox" checked>
             Studio look, like the other product photos

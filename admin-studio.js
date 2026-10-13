@@ -445,6 +445,40 @@
     vignette(ctx);
   }
 
+  // Photos that already have a dark studio background (the showcase photos,
+  // or ones made with this tool) are kept as they are; the accent only adds
+  // red and blue light on top.
+  function composeRestyle(ctx, img, { accent = false } = {}) {
+    composeOriginal(ctx, img);
+    if (!accent) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    drawLights(ctx, 1.1);
+    ctx.globalCompositeOperation = "overlay";
+    const tint = ctx.createLinearGradient(0, 0, size, 0);
+    tint.addColorStop(0, "rgba(255, 30, 40, 0.55)");
+    tint.addColorStop(0.35, "rgba(255, 30, 40, 0)");
+    tint.addColorStop(0.65, "rgba(40, 120, 255, 0)");
+    tint.addColorStop(1, "rgba(40, 120, 255, 0.5)");
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, size, size);
+    ctx.restore();
+  }
+
+  function hasDarkBackdrop(img) {
+    const sample = document.createElement("canvas");
+    sample.width = 64;
+    sample.height = 64;
+    const sampleCtx = context(sample, { willReadFrequently: true });
+    sampleCtx.drawImage(img, 0, 0, 64, 64);
+    const { data } = sampleCtx.getImageData(0, 0, 64, 64);
+    const edge = [];
+    for (let i = 0; i < 64; i += 1) edge.push(i, 63 * 64 + i, i * 64, i * 64 + 63);
+    const light = edge.map((p) => data[p * 4] * 0.299 + data[p * 4 + 1] * 0.587 + data[p * 4 + 2] * 0.114)
+      .sort((a, b) => a - b);
+    return light[Math.floor(light.length / 2)] < 45;
+  }
+
   function averageBrightness(img) {
     const sample = document.createElement("canvas");
     sample.width = 64;
@@ -487,6 +521,23 @@
     if (!studio) {
       composeOriginal(ctx, img);
       photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
+      return photo;
+    }
+
+    if (hasDarkBackdrop(img)) {
+      photo.mode = "restyle";
+      photo.variants = {};
+      for (const variant of ["standard", "accent"]) {
+        const fresh = newCanvas();
+        composeRestyle(context(fresh), img, { accent: variant === "accent" });
+        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
+      }
+      photo.choice = "accent";
+      delete photo.dataUrl;
+      Object.defineProperty(photo, "dataUrl", {
+        get: () => photo.variants[photo.choice],
+        enumerable: true
+      });
       return photo;
     }
 

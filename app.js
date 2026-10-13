@@ -402,7 +402,8 @@ function carMarkup(car, variants = [car]) {
   const stockBadge = soldOut
     ? '<span class="stock-badge stock-badge--sold">Sold out</span>'
     : remaining === 1 && car.stock > 1 ? '<span class="stock-badge stock-badge--low">Only 1 left</span>' : "";
-  const showcaseImage = showcaseImages[car.id];
+  // A photo saved in admin (a data URL) replaces the built-in showcase photo.
+  const showcaseImage = car.image?.startsWith("data:") ? null : showcaseImages[car.id];
   const displayImage = showcaseImage || car.image;
   const imageSrc = displayImage && displayImage.startsWith("data:") ? displayImage : `${displayImage}?v=${assetVersion}`;
   const detailsHref = `product.html?id=${encodeURIComponent(car.id)}`;

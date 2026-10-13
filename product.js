@@ -321,7 +321,8 @@ function renderProduct() {
   const soldOut = !(product.stock > 0);
   const stockLabel = soldOut ? "" : product.stock > 1 ? `${remaining} of ${product.stock} left` : remaining > 0 ? "1 available" : "In your cart";
   const buttonText = soldOut ? "Sold out" : remaining > 0 ? inCart > 0 ? "Add another" : "Add to cart" : "All in your cart";
-  const showcaseImage = (window.zenzoShowcaseImages || {})[product.id];
+  // A photo saved in admin (a data URL) replaces the built-in showcase photo.
+  const showcaseImage = product.image?.startsWith("data:") ? null : (window.zenzoShowcaseImages || {})[product.id];
   const gallery = product.gallery?.length ? product.gallery : [showcaseImage || product.image];
   if (activeImageIndex >= gallery.length) activeImageIndex = 0;
   const activeImage = gallery[activeImageIndex];
