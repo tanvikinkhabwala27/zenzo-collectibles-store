@@ -415,7 +415,8 @@
     return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
   }
 
-  function composeFullPhoto(ctx, img) {
+  // accent: true lights a busy photo more strongly in red and blue.
+  function composeFullPhoto(ctx, img, { accent = false } = {}) {
     const scale = Math.max(size / img.width, size / img.height);
     const width = img.width * scale;
     const height = img.height * scale;
@@ -426,9 +427,30 @@
     ctx.filter = "none";
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    drawLights(ctx, 0.8);
+    drawLights(ctx, accent ? 1.5 : 0.8);
     ctx.restore();
+    if (accent) {
+      // Tint the sides red and blue so the accent shows even on bright photos.
+      ctx.save();
+      ctx.globalCompositeOperation = "overlay";
+      const tint = ctx.createLinearGradient(0, 0, size, 0);
+      tint.addColorStop(0, "rgba(255, 30, 40, 0.75)");
+      tint.addColorStop(0.4, "rgba(255, 30, 40, 0)");
+      tint.addColorStop(0.6, "rgba(40, 120, 255, 0)");
+      tint.addColorStop(1, "rgba(40, 120, 255, 0.7)");
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, size, size);
+      ctx.restore();
+    }
     vignette(ctx);
+  }
+
+  function averageBrightness(img) {
+    const sample = document.createElement("canvas");
+    sample.width = 64;
+    sample.height = 64;
+    context(sample).drawImage(img, 0, 0, 64, 64);
+    return brightness(sample);
   }
 
   function composeOriginal(ctx, img) {
@@ -471,9 +493,19 @@
     const initial = prepareCutOut(img);
     const product = initial && productCanvas(initial);
     if (!product) {
-      composeFullPhoto(ctx, img);
       photo.mode = "studio-photo";
-      photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
+      photo.variants = {};
+      for (const variant of ["standard", "accent"]) {
+        const fresh = newCanvas();
+        composeFullPhoto(context(fresh), img, { accent: variant === "accent" });
+        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
+      }
+      photo.choice = averageBrightness(img) < 85 ? "accent" : "standard";
+      delete photo.dataUrl;
+      Object.defineProperty(photo, "dataUrl", {
+        get: () => photo.variants[photo.choice],
+        enumerable: true
+      });
       return photo;
     }
 

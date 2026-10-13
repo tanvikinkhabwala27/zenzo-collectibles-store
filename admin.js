@@ -247,7 +247,7 @@ function showLogin() {
 const preparedPhotos = new WeakMap();
 const studioNotes = {
   studio: "Background removed and placed on the Zenzo stage. Pick Standard or Red accent under the large preview. If any old background is left (for example inside a loop), tap it in the large preview to remove it.",
-  "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. A photo on a plain background gives the best result.",
+  "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. Pick Standard or Red accent under the large preview. A photo on a plain background gives the best result.",
   original: "Original photo, cropped square."
 };
 
