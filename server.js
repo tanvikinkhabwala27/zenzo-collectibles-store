@@ -922,7 +922,8 @@ async function handleApi(req, res, url) {
 
   if (req.method === "PATCH" && url.pathname.startsWith("/api/admin/products/")) {
     const id = decodeURIComponent(url.pathname.split("/").pop());
-    const body = await readBody(req);
+    // Admin edits can carry a replacement photo, so allow the admin size limit.
+    const body = await readBody(req, maxAdminBodyBytes);
     const collection = cleanText(body.collection, "Collection");
     if (!collections.includes(collection)) return send(res, 400, { error: "Unknown collection." });
     const changes = {
