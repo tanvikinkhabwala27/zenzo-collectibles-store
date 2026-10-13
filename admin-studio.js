@@ -491,9 +491,7 @@
   // Photos that already have a dark studio background (the showcase photos,
   // or ones made with this tool) are kept as they are; the accent only adds
   // red and blue light on top.
-  function composeRestyle(ctx, img, { accent = false } = {}) {
-    composeOriginal(ctx, img);
-    if (!accent) return;
+  function addAccentLighting(ctx) {
     ctx.save();
     ctx.globalCompositeOperation = "screen";
     drawLights(ctx, 1.1);
@@ -506,6 +504,77 @@
     ctx.fillStyle = tint;
     ctx.fillRect(0, 0, size, size);
     ctx.restore();
+  }
+
+  function composeRestyle(ctx, img, { accent = false } = {}) {
+    composeOriginal(ctx, img);
+    if (accent) addAccentLighting(ctx);
+  }
+
+  // Photos made by the stand version of this tool: the product stands with
+  // its base line at 70% of the height on a stage this file can redraw
+  // exactly. Redrawing the empty stage (plain, or with accent lighting added
+  // later) and comparing it with the photo separates the product, so it can
+  // be moved onto the floating accessory look. Returns a product canvas, or
+  // null when the photo was not made that way.
+  function extractFromStandPhoto(img) {
+    const photo = newCanvas();
+    const photoCtx = context(photo, { willReadFrequently: true });
+    composeOriginal(photoCtx, img);
+    const pixels = photoCtx.getImageData(0, 0, size, size).data;
+
+    const plain = newCanvas();
+    const plainCtx = context(plain, { willReadFrequently: true });
+    drawStage(plainCtx);
+    drawPedestal(plainCtx, size / 2, size * 0.712, size * 0.86);
+    vignette(plainCtx);
+    const lit = newCanvas();
+    const litCtx = context(lit, { willReadFrequently: true });
+    litCtx.drawImage(plain, 0, 0);
+    addAccentLighting(litCtx);
+
+    // Pick the empty stage that matches the photo's top band best.
+    const band = Math.round(size * 0.15) * size * 4;
+    let best = null;
+    for (const candidate of [plainCtx, litCtx]) {
+      const data = candidate.getImageData(0, 0, size, size).data;
+      let total = 0;
+      for (let i = 0; i < band; i += 16) {
+        total += Math.abs(data[i] - pixels[i]) + Math.abs(data[i + 1] - pixels[i + 1]) + Math.abs(data[i + 2] - pixels[i + 2]);
+      }
+      const score = total / (band / 16) / 3;
+      if (!best || score < best.score) best = { score, data };
+    }
+    if (!best || best.score > 12) return null;
+
+    const cutY = Math.round(size * 0.7);
+    const state = { width: size, height: size, data: pixels, background: new Uint8Array(size * size) };
+    const candidateBackground = new Uint8Array(size * size);
+    for (let p = 0; p < size * size; p += 1) {
+      const i = p * 4;
+      const diff = Math.abs(best.data[i] - pixels[i]) + Math.abs(best.data[i + 1] - pixels[i + 1]) + Math.abs(best.data[i + 2] - pixels[i + 2]);
+      candidateBackground[p] = Math.floor(p / size) >= cutY || diff < 60 ? 1 : 0;
+    }
+    // Background is what matches the empty stage and connects to the edges;
+    // anything enclosed by the product (dark parts close to the stage
+    // colour) stays with the product.
+    const queue = [];
+    for (let x = 0; x < size; x += 1) queue.push(x, (size - 1) * size + x);
+    for (let y = 0; y < size; y += 1) queue.push(y * size, y * size + size - 1);
+    for (const p of queue) if (candidateBackground[p]) state.background[p] = 1;
+    for (let k = 0; k < queue.length; k += 1) {
+      const p = queue[k];
+      if (!state.background[p]) continue;
+      for (const n of neighbours(p, size, size * size)) {
+        if (!state.background[n] && candidateBackground[n]) {
+          state.background[n] = 1;
+          queue.push(n);
+        }
+      }
+    }
+    const product = productCanvas(state);
+    if (!product || product.canvas.width < size * 0.03 || product.canvas.height < size * 0.03) return null;
+    return product;
   }
 
   function hasDarkBackdrop(img) {
@@ -566,6 +635,27 @@
     if (!studio) {
       composeOriginal(ctx, img);
       photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
+      return photo;
+    }
+
+    // Non-car photos that were made with the stand: move the product onto the
+    // floating accessory look.
+    const standless = !stand && hasDarkBackdrop(img) ? extractFromStandPhoto(img) : null;
+    if (standless) {
+      photo.mode = "unstand";
+      photo.variants = {};
+      let placement;
+      for (const variant of ["standard", "accent"]) {
+        const fresh = newCanvas();
+        placement = composeFloating(context(fresh), standless, { accent: variant === "accent" });
+        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
+      }
+      photo.choice = placement.dark ? "accent" : "standard";
+      delete photo.dataUrl;
+      Object.defineProperty(photo, "dataUrl", {
+        get: () => photo.variants[photo.choice],
+        enumerable: true
+      });
       return photo;
     }
 
