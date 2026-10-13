@@ -15,3 +15,13 @@ window.zenzoShowcaseImages = {
   "assorted-performance-3-pack": "assets/showcase/assorted-performance-3-pack.webp",
   "batman-barbie-2-pack": "assets/showcase/batman-barbie-2-pack.webp"
 };
+
+// Original photos of the launch products, kept so the admin studio tool can
+// start again from the real photo instead of an already edited copy.
+window.zenzoOriginalPhotos = {
+  "cake-slice-mini-keychain": "assets/accessories/cake-slice-mini.jpg",
+  "paw-keychain": "assets/accessories/paw-keychain.jpg",
+  "flower-charm-keychain": "assets/accessories/flower-charm.jpg",
+  "cherry-charm-keychain": "assets/accessories/cherry-charm.jpg",
+  "fries-keychain": "assets/accessories/fries-keychain.jpg"
+};

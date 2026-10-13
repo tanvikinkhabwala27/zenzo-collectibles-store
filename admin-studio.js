@@ -167,6 +167,24 @@
     return lit;
   }
 
+  // Red accent: a red glow behind the product, so black and dark parts show
+  // as a clear outline instead of disappearing into the dark background.
+  function backGlow(ctx, x, y, width, height) {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const radius = Math.max(width, height) * 0.72 + size * 0.06;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(1, Math.min(1.2, Math.max(0.75, height / Math.max(width, 1))));
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+    for (const [stop, alpha] of [[0, 0.62], [0.35, 0.42], [0.62, 0.18], [0.85, 0.05], [1, 0]]) {
+      glow.addColorStop(stop, `rgba(205, 32, 44, ${alpha})`);
+    }
+    ctx.fillStyle = glow;
+    ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+    ctx.restore();
+  }
+
   function vignette(ctx) {
     const shade = ctx.createRadialGradient(size / 2, size / 2, size * 0.3, size / 2, size / 2, size * 0.75);
     shade.addColorStop(0, "rgba(0, 0, 0, 0)");
@@ -391,6 +409,7 @@
     sharpen(scaled, scale < 1 ? 0.35 : 0.55);
     const darkness = (150 - brightness(scaled)) / 90;
     const strength = Math.min(1, Math.max(0.35, darkness));
+    if (accent) backGlow(ctx, x, y, width, height);
 
     ctx.save();
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
@@ -437,6 +456,7 @@
     const darkness = (150 - brightness(scaled)) / 90;
     // Darker products get more coloured edge light.
     const strength = Math.min(1, Math.max(0.35, darkness));
+    if (accent) backGlow(ctx, x, y, width, height);
     // Same wide base for every product, like the showcase photos.
     drawPedestal(ctx, size / 2, baseline + size * 0.012, Math.max(width * 1.12, size * 0.86));
 
@@ -533,19 +553,28 @@
     litCtx.drawImage(plain, 0, 0);
     addAccentLighting(litCtx);
 
-    // Pick the empty stage that matches the photo's top band best.
-    const band = Math.round(size * 0.15) * size * 4;
+    // Pick the empty stage that matches the photo best. Both the top band
+    // (backdrop) and the front of the stand must match, so photos that only
+    // happen to have a dark background are left alone.
+    const regionScore = (data, top, bottom, left, right) => {
+      let total = 0;
+      let count = 0;
+      for (let y = Math.round(size * top); y < size * bottom; y += 3) {
+        for (let x = Math.round(size * left); x < size * right; x += 3) {
+          const i = (y * size + x) * 4;
+          total += Math.abs(data[i] - pixels[i]) + Math.abs(data[i + 1] - pixels[i + 1]) + Math.abs(data[i + 2] - pixels[i + 2]);
+          count += 1;
+        }
+      }
+      return total / count / 3;
+    };
     let best = null;
     for (const candidate of [plainCtx, litCtx]) {
       const data = candidate.getImageData(0, 0, size, size).data;
-      let total = 0;
-      for (let i = 0; i < band; i += 16) {
-        total += Math.abs(data[i] - pixels[i]) + Math.abs(data[i + 1] - pixels[i + 1]) + Math.abs(data[i + 2] - pixels[i + 2]);
-      }
-      const score = total / (band / 16) / 3;
+      const score = regionScore(data, 0, 0.15, 0, 1);
       if (!best || score < best.score) best = { score, data };
     }
-    if (!best || best.score > 12) return null;
+    if (!best || best.score > 12 || regionScore(best.data, 0.735, 0.79, 0.1, 0.9) > 8) return null;
 
     const cutY = Math.round(size * 0.7);
     const state = { width: size, height: size, data: pixels, background: new Uint8Array(size * size) };
@@ -553,7 +582,7 @@
     for (let p = 0; p < size * size; p += 1) {
       const i = p * 4;
       const diff = Math.abs(best.data[i] - pixels[i]) + Math.abs(best.data[i + 1] - pixels[i + 1]) + Math.abs(best.data[i + 2] - pixels[i + 2]);
-      candidateBackground[p] = Math.floor(p / size) >= cutY || diff < 60 ? 1 : 0;
+      candidateBackground[p] = Math.floor(p / size) >= cutY || diff < 36 ? 1 : 0;
     }
     // Background is what matches the empty stage and connects to the edges;
     // anything enclosed by the product (dark parts close to the stage
@@ -572,9 +601,55 @@
         }
       }
     }
+    keepMainProduct(state);
     const product = productCanvas(state);
     if (!product || product.canvas.width < size * 0.03 || product.canvas.height < size * 0.03) return null;
     return product;
+  }
+
+  // Drops stray specks and leftover patches that are not part of the
+  // product: keeps the largest piece and anything close to it (a key ring
+  // or chain), removes the rest.
+  function keepMainProduct(state) {
+    const { width, height, background } = state;
+    const label = new Int32Array(width * height);
+    const pieces = [];
+    for (let start = 0; start < width * height; start += 1) {
+      if (background[start] || label[start]) continue;
+      const id = pieces.length + 1;
+      const piece = { id, area: 0, minX: width, minY: height, maxX: 0, maxY: 0 };
+      const stack = [start];
+      label[start] = id;
+      while (stack.length) {
+        const p = stack.pop();
+        const x = p % width;
+        const y = (p - x) / width;
+        piece.area += 1;
+        if (x < piece.minX) piece.minX = x;
+        if (x > piece.maxX) piece.maxX = x;
+        if (y < piece.minY) piece.minY = y;
+        if (y > piece.maxY) piece.maxY = y;
+        for (const n of neighbours(p, width, width * height)) {
+          if (!background[n] && !label[n]) {
+            label[n] = id;
+            stack.push(n);
+          }
+        }
+      }
+      pieces.push(piece);
+    }
+    if (pieces.length < 2) return;
+    const main = pieces.reduce((a, b) => (b.area > a.area ? b : a));
+    const margin = width * 0.04;
+    const keep = new Uint8Array(pieces.length + 1);
+    for (const piece of pieces) {
+      const near = piece.maxX >= main.minX - margin && piece.minX <= main.maxX + margin
+        && piece.maxY >= main.minY - margin && piece.minY <= main.maxY + margin;
+      keep[piece.id] = piece === main || (near && piece.area >= 30) ? 1 : 0;
+    }
+    for (let p = 0; p < width * height; p += 1) {
+      if (label[p] && !keep[label[p]]) background[p] = 1;
+    }
   }
 
   function hasDarkBackdrop(img) {

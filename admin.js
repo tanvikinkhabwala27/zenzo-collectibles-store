@@ -246,11 +246,7 @@ function showLogin() {
 
 const preparedPhotos = new WeakMap();
 const studioNotes = {
-  studio: "Background removed and placed on the Zenzo stage. Pick Standard or Red accent under the large preview. If any old background is left (for example inside a loop), tap it in the large preview to remove it.",
-  "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. Pick Standard or Red accent under the large preview. A photo on a plain background gives the best result.",
-  original: "Original photo, cropped square.",
-  restyle: "This photo already has a dark studio background, so it is kept as it is. Standard leaves it unchanged; Red accent adds red and blue lighting.",
-  unstand: "The stand has been taken out and the product placed on the accessory background. Pick Standard or Red accent under the large preview."
+  studio: "If any old background is left (for example inside a loop), tap it in the large preview to remove it."
 };
 
 function showPreview(form, photo) {
@@ -286,7 +282,7 @@ function showPreview(form, photo) {
   const lowResolution = longest && longest < 1000
     ? ` This photo is only ${photo.sourceWidth} × ${photo.sourceHeight} pixels, so it will look soft. For a sharp result, upload a photo at least 1200 pixels wide (any recent phone photo is fine).`
     : "";
-  preview.querySelector("p").textContent = studioNotes[photo.mode] + lowResolution;
+  preview.querySelector("p").textContent = ((studioNotes[photo.mode] || "") + lowResolution).trim();
   preview.classList.toggle("is-low-res", Boolean(lowResolution));
   let reset = preview.querySelector(".studio-reset");
   if (photo.canEdit && !reset) {
@@ -401,13 +397,21 @@ async function runBulkStudio() {
     knownProducts = products;
     for (const [index, product] of products.entries()) {
       bulkStudio.innerHTML = `<p class="checkout-note">Checking photo ${index + 1} of ${products.length}: ${escapeHtml(productLabel(product))}...</p>`;
-      const url = currentPhotoUrl(product);
+      let url = currentPhotoUrl(product);
       if (!url) continue;
       try {
-        const photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), {
-          studio: true,
-          stand: usesStand(product.collection)
-        });
+        const options = { studio: true, stand: usesStand(product.collection) };
+        let photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), options);
+        // A stand that should not be there: start again from the real photo
+        // when the repo still has it.
+        const original = (window.zenzoOriginalPhotos || {})[product.id];
+        if (photo.mode === "unstand" && original) {
+          url = original;
+          photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), options);
+          photo.choice = "standard";
+          bulkResults.push({ product, url, photo, include: true });
+          continue;
+        }
         // Photos that already have the dark studio look are left alone.
         if (photo.mode !== "restyle" && photo.variants) bulkResults.push({ product, url, photo, include: true });
       } catch {
@@ -509,13 +513,13 @@ document.addEventListener("click", async (event) => {
   const job = form && preparedPhotos.get(form);
   if (!job) return;
   const photo = await job;
-  if (!photo.canEdit) return;
   const choice = event.target.closest("[data-studio-choice]");
-  if (choice) {
+  if (choice && photo.variants) {
     photo.choice = choice.dataset.studioChoice;
     showPreview(form, photo);
     return;
   }
+  if (!photo.canEdit) return;
   if (event.target.closest(".studio-reset")) {
     photo.reset();
     showPreview(form, photo);
@@ -541,6 +545,12 @@ function usesStand(collection) {
 function currentPhotoUrl(product) {
   if (product.image?.startsWith("data:")) return product.image;
   return (window.zenzoShowcaseImages || {})[product.id] || product.image || "";
+}
+
+// Where the studio tool starts from: the real photo when the repo still has
+// it, so edits never stack on an already edited copy.
+function sourcePhotoUrl(product) {
+  return (window.zenzoOriginalPhotos || {})[product.id] || currentPhotoUrl(product);
 }
 
 function productLabel(product) {
@@ -638,7 +648,7 @@ async function renderProducts() {
             Replace photo (optional)
             <input name="image" type="file" accept="image/*">
           </label>
-          ${currentPhotoUrl(product) ? `<button class="remove-button account-link field--full" type="button" data-reedit="${escapeHtml(currentPhotoUrl(product))}">Or edit the current photo (Standard / Red accent)</button>` : ""}
+          ${currentPhotoUrl(product) ? `<button class="remove-button account-link field--full" type="button" data-reedit="${escapeHtml(sourcePhotoUrl(product))}">Or edit the current photo (Standard / Red accent)</button>` : ""}
           <label class="studio-toggle field--full">
             <input name="studio" type="checkbox" checked>
             Studio look, like the other product photos
