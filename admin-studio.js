@@ -6,6 +6,23 @@
   const workingSize = 1600;
   const quality = 0.9;
 
+  // The empty background of the accessory photos (taken from the paw
+  // keychain photo), so edited accessories match the real ones exactly.
+  let accessoryBackdrop = null;
+  let backdropLoad = null;
+  function loadBackdrop() {
+    backdropLoad ||= new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        accessoryBackdrop = img;
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = "assets/accessories/backdrop.jpg";
+    });
+    return backdropLoad;
+  }
+
   function context(canvas, options) {
     const ctx = canvas.getContext("2d", options);
     ctx.imageSmoothingEnabled = true;
@@ -145,6 +162,24 @@
       ctx.drawImage(glow, x + offset * (6 + 8 * strength), y - 4, width, height);
       ctx.restore();
     }
+  }
+
+  function softHalo(ctx, product, x, y, strength) {
+    const halo = document.createElement("canvas");
+    halo.width = product.width;
+    halo.height = product.height;
+    const haloCtx = context(halo);
+    haloCtx.drawImage(product, 0, 0);
+    haloCtx.globalCompositeOperation = "source-in";
+    haloCtx.fillStyle = `rgba(200, 205, 215, ${0.32 * strength})`;
+    haloCtx.fillRect(0, 0, halo.width, halo.height);
+    ctx.save();
+    ctx.filter = "blur(16px)";
+    ctx.drawImage(halo, x, y);
+    ctx.filter = "blur(5px)";
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(halo, x, y);
+    ctx.restore();
   }
 
   function lightProduct(product, strength) {
@@ -425,15 +460,20 @@
   // background with faint red and blue at the sides, the product floating in
   // the middle with a soft shadow and no stand.
   function composeFloating(ctx, product, { accent = false } = {}) {
-    ctx.fillStyle = "#0a0b0f";
-    ctx.fillRect(0, 0, size, size);
-    drawLights(ctx, 0.38, 0.62);
+    if (accessoryBackdrop) {
+      ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
+    } else {
+      ctx.fillStyle = "#0a0b0f";
+      ctx.fillRect(0, 0, size, size);
+      drawLights(ctx, 0.38, 0.62);
+    }
     const image = product.canvas;
-    const scale = Math.min((size * 0.7) / image.width, (size * 0.68) / image.height, 2);
+    // Same size and position as the product in the accessory photos.
+    const scale = Math.min((size * 0.6) / image.width, (size * 0.66) / image.height, 2);
     const width = image.width * scale;
     const height = image.height * scale;
     const x = (size - width) / 2;
-    const y = (size - height) / 2 + size * 0.02;
+    const y = Math.min(size * 0.47 - height / 2, size * 0.8 - height);
     const scaled = document.createElement("canvas");
     scaled.width = Math.max(1, Math.round(width));
     scaled.height = Math.max(1, Math.round(height));
@@ -457,9 +497,12 @@
       rimLight(ctx, scaled, x, y, strength);
       ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
     } else {
+      // Dark products get a faint neutral halo, like a studio back light,
+      // so black parts keep their outline on the dark background.
+      if (darkness > 0.1) softHalo(ctx, scaled, x, y, Math.min(1, darkness));
       ctx.drawImage(scaled, x, y, width, height);
     }
-    vignette(ctx);
+    if (!accessoryBackdrop) vignette(ctx);
     return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
   }
 
@@ -752,6 +795,7 @@
   // starts on accent for dark products; dataUrl follows the choice.
   async function createStudioPhoto(file, { studio = true, stand = true } = {}) {
     const img = await loadImage(file);
+    if (!stand) await loadBackdrop();
     const canvas = newCanvas();
     const ctx = context(canvas);
     const photo = {
