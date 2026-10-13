@@ -308,7 +308,10 @@ async function preparePhoto(form) {
     if (preview) preview.hidden = true;
     return null;
   }
-  const job = window.zenzoStudio.createStudioPhoto(file, { studio: form.elements.studio?.checked !== false });
+  const job = window.zenzoStudio.createStudioPhoto(file, {
+    studio: form.elements.studio?.checked !== false,
+    stand: usesStand(form.elements.collection?.value)
+  });
   preparedPhotos.set(form, job);
   if (preview) {
     preview.hidden = false;
@@ -332,7 +335,7 @@ async function photoFor(form) {
 
 document.addEventListener("change", (event) => {
   const form = event.target.closest("form");
-  if (form && (event.target.name === "image" || event.target.name === "studio")) {
+  if (form && ["image", "studio", "collection"].includes(event.target.name)) {
     preparePhoto(form).catch(() => {});
   }
 });
@@ -400,7 +403,10 @@ async function runBulkStudio() {
       const url = currentPhotoUrl(product);
       if (!url) continue;
       try {
-        const photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), { studio: true });
+        const photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), {
+          studio: true,
+          stand: usesStand(product.collection)
+        });
         // Photos that already have the dark studio look are left alone.
         if (photo.mode !== "restyle" && photo.variants) bulkResults.push({ product, url, photo, include: true });
       } catch {
@@ -523,6 +529,12 @@ document.addEventListener("click", async (event) => {
 });
 
 let knownProducts = [];
+
+// Hot Wheels photos sit on the black display stand like the car photos;
+// every other collection floats like the accessory photos.
+function usesStand(collection) {
+  return (collection || "Hot Wheels") === "Hot Wheels";
+}
 
 // The photo shoppers currently see for a product.
 function currentPhotoUrl(product) {

@@ -31,10 +31,10 @@
 
   // Edge lights like the showcase photos: a narrow red light at the far left
   // and blue at the far right, falling off into the dark.
-  function drawLights(ctx, strength = 1) {
+  function drawLights(ctx, strength = 1, centerY = 0.4) {
     for (const [x, color] of [[0, "255, 36, 44"], [size, "45, 125, 255"]]) {
       ctx.save();
-      ctx.translate(x, size * 0.4);
+      ctx.translate(x, size * centerY);
       ctx.scale(0.42, 1);
       const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.75);
       // Many stops give a smooth falloff instead of a visible band edge.
@@ -369,9 +369,52 @@
 
   // Draws the cut-out product on the stage and returns where it was placed,
   // so clicks on the preview can be mapped back to the photo.
+  // Accessory look, as in the accessory photos: a near-black seamless
+  // background with faint red and blue at the sides, the product floating in
+  // the middle with a soft shadow and no stand.
+  function composeFloating(ctx, product, { accent = false } = {}) {
+    ctx.fillStyle = "#0a0b0f";
+    ctx.fillRect(0, 0, size, size);
+    drawLights(ctx, 0.38, 0.62);
+    const image = product.canvas;
+    const scale = Math.min((size * 0.7) / image.width, (size * 0.68) / image.height, 2);
+    const width = image.width * scale;
+    const height = image.height * scale;
+    const x = (size - width) / 2;
+    const y = (size - height) / 2 + size * 0.02;
+    const scaled = document.createElement("canvas");
+    scaled.width = Math.max(1, Math.round(width));
+    scaled.height = Math.max(1, Math.round(height));
+    const scaledCtx = context(scaled);
+    scaledCtx.filter = "contrast(1.05) saturate(1.06)";
+    scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
+    sharpen(scaled, scale < 1 ? 0.35 : 0.55);
+    const darkness = (150 - brightness(scaled)) / 90;
+    const strength = Math.min(1, Math.max(0.35, darkness));
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.filter = "blur(18px)";
+    ctx.beginPath();
+    ctx.ellipse(size / 2, y + height + size * 0.015, width * 0.4, Math.max(8, size * 0.018), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (accent) {
+      rimLight(ctx, scaled, x, y, strength);
+      ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
+    } else {
+      ctx.drawImage(scaled, x, y, width, height);
+    }
+    vignette(ctx);
+    return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
+  }
+
   // accent: false draws the standard look; true adds the red and blue edge
-  // light, stronger for darker products.
-  function composeCutOut(ctx, product, { accent = false } = {}) {
+  // light, stronger for darker products. stand: false uses the accessory
+  // look without the display base.
+  function composeCutOut(ctx, product, { accent = false, stand = true } = {}) {
+    if (!stand) return composeFloating(ctx, product, { accent });
     drawStage(ctx);
     const image = product.canvas;
     // Enlarging a small photo more than this only adds blur, so small
@@ -508,7 +551,7 @@
   // leftover background around it; dataUrl always holds the latest result.
   // Cut-out photos also get variants { standard, accent } and a choice, which
   // starts on accent for dark products; dataUrl follows the choice.
-  async function createStudioPhoto(file, { studio = true } = {}) {
+  async function createStudioPhoto(file, { studio = true, stand = true } = {}) {
     const img = await loadImage(file);
     const canvas = newCanvas();
     const ctx = context(canvas);
@@ -577,7 +620,7 @@
     const renderVariants = (current) => {
       for (const variant of ["standard", "accent"]) {
         const fresh = newCanvas();
-        placement = composeCutOut(context(fresh), current, { accent: variant === "accent" });
+        placement = composeCutOut(context(fresh), current, { accent: variant === "accent", stand });
         photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
       }
     };
