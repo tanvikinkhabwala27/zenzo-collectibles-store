@@ -708,7 +708,7 @@
   // Drops stray specks and leftover patches that are not part of the
   // product: keeps the largest piece and anything close to it (a key ring
   // or chain), removes the rest.
-  function keepMainProduct(state) {
+  function keepMainProduct(state, { below = Infinity } = {}) {
     const { width, height, background } = state;
     const label = new Int32Array(width * height);
     const pieces = [];
@@ -736,18 +736,270 @@
       }
       pieces.push(piece);
     }
-    if (pieces.length < 2) return;
-    const main = pieces.reduce((a, b) => (b.area > a.area ? b : a));
+    if (pieces.length < 2 && below === Infinity) return;
+    const candidates = pieces.filter((piece) => piece.minY < below);
+    if (!candidates.length) return;
+    const main = candidates.reduce((a, b) => (b.area > a.area ? b : a));
     const margin = width * 0.04;
     const keep = new Uint8Array(pieces.length + 1);
     for (const piece of pieces) {
       const near = piece.maxX >= main.minX - margin && piece.minX <= main.maxX + margin
         && piece.maxY >= main.minY - margin && piece.minY <= main.maxY + margin;
-      keep[piece.id] = piece === main || (near && piece.area >= 30) ? 1 : 0;
+      keep[piece.id] = piece === main || (near && piece.area >= 30 && piece.minY < below) ? 1 : 0;
     }
     for (let p = 0; p < width * height; p += 1) {
       if (label[p] && !keep[label[p]]) background[p] = 1;
     }
+  }
+
+  // True when the photo already sits on the accessory background (the launch
+  // accessory photos), so it is kept as it is.
+  function matchesAccessoryBackdrop(img) {
+    if (!accessoryBackdrop) return false;
+    const sample = (source) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 48;
+      canvas.height = 48;
+      const sampleCtx = context(canvas, { willReadFrequently: true });
+      sampleCtx.drawImage(source, 0, 0, 48, 48);
+      return sampleCtx.getImageData(0, 0, 48, 48).data;
+    };
+    const a = sample(img);
+    const b = sample(accessoryBackdrop);
+    let total = 0;
+    let count = 0;
+    for (let y = 0; y < 48; y += 1) {
+      for (let x = 0; x < 48; x += 1) {
+        if (x > 6 && x < 41 && y > 6 && y < 41) continue;
+        const i = (y * 48 + x) * 4;
+        total += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+        count += 3;
+      }
+    }
+    return total / count < 9;
+  }
+
+  // Photos on some other dark background (a dark stage with a glossy floor,
+  // say): the backdrop is smooth, so the product is what stands out from a
+  // heavily blurred copy of it. Dark parts enclosed by the product's outline
+  // are kept, and the floor reflection below the horizon is dropped.
+  function extractFromDarkPhoto(img) {
+    const work = 800;
+    const canvas = document.createElement("canvas");
+    canvas.width = work;
+    canvas.height = work;
+    const workCtx = context(canvas, { willReadFrequently: true });
+    const scale = Math.max(work / img.width, work / img.height);
+    workCtx.drawImage(img, (work - img.width * scale) / 2, (work - img.height * scale) / 2, img.width * scale, img.height * scale);
+    const data = workCtx.getImageData(0, 0, work, work).data;
+    const total = work * work;
+    const lum = new Float32Array(total);
+    for (let p = 0; p < total; p += 1) lum[p] = data[p * 4] * 0.299 + data[p * 4 + 1] * 0.587 + data[p * 4 + 2] * 0.114;
+
+    // Smooth backdrop estimate, ignoring the product on the second pass.
+    const blurred = (weights) => {
+      const small = 50;
+      const sums = new Float32Array(small * small * 4);
+      const cell = work / small;
+      for (let p = 0; p < total; p += 1) {
+        const w = weights ? weights[p] : 1;
+        if (!w) continue;
+        const x = p % work;
+        const y = (p - x) / work;
+        const c = (Math.floor(y / cell) * small + Math.floor(x / cell)) * 4;
+        sums[c] += data[p * 4];
+        sums[c + 1] += data[p * 4 + 1];
+        sums[c + 2] += data[p * 4 + 2];
+        sums[c + 3] += 1;
+      }
+      // Average each cell; cells covered by the product take the average of
+      // their filled neighbours, spreading inwards until all are filled.
+      const colour = new Float32Array(small * small * 3);
+      const filled = new Uint8Array(small * small);
+      for (let c = 0; c < small * small; c += 1) {
+        if (sums[c * 4 + 3] < cell) continue;
+        for (let k = 0; k < 3; k += 1) colour[c * 3 + k] = sums[c * 4 + k] / sums[c * 4 + 3];
+        filled[c] = 1;
+      }
+      for (let pass = 0; pass < small; pass += 1) {
+        const ready = filled.slice();
+        let missing = 0;
+        for (let c = 0; c < small * small; c += 1) {
+          if (ready[c]) continue;
+          const x = c % small;
+          const near = [x > 0 ? c - 1 : -1, x < small - 1 ? c + 1 : -1, c - small, c + small]
+            .filter((n) => n >= 0 && n < small * small && ready[n]);
+          if (!near.length) {
+            missing += 1;
+            continue;
+          }
+          for (let k = 0; k < 3; k += 1) colour[c * 3 + k] = near.reduce((sum, n) => sum + colour[n * 3 + k], 0) / near.length;
+          filled[c] = 1;
+        }
+        if (!missing) break;
+      }
+      const grid = document.createElement("canvas");
+      grid.width = small;
+      grid.height = small;
+      const gridCtx = context(grid, { willReadFrequently: true });
+      const pixels = gridCtx.createImageData(small, small);
+      // Fill cells with no backdrop from their neighbours.
+      for (let pass = 0; pass < 12; pass += 1) {
+        for (let c = 0; c < small * small; c += 1) {
+          if (sums[c * 4 + 3] > 0) continue;
+          const x = c % small;
+          const near = [c - 1, c + 1, c - small, c + small].filter((n) => n >= 0 && n < small * small
+            && Math.abs((n % small) - x) <= 1 && sums[n * 4 + 3] > 0);
+          if (!near.length) continue;
+          for (const n of near) for (let k = 0; k < 3; k += 1) sums[c * 4 + k] += sums[n * 4 + k] / sums[n * 4 + 3] / near.length;
+          sums[c * 4 + 3] = pass === 11 ? 1 : 1e-6 + 1;
+        }
+      }
+      for (let c = 0; c < small * small; c += 1) {
+        pixels.data[c * 4] = colour[c * 3];
+        pixels.data[c * 4 + 1] = colour[c * 3 + 1];
+        pixels.data[c * 4 + 2] = colour[c * 3 + 2];
+        pixels.data[c * 4 + 3] = 255;
+      }
+      gridCtx.putImageData(pixels, 0, 0);
+      const full = document.createElement("canvas");
+      full.width = work;
+      full.height = work;
+      const fullCtx = context(full, { willReadFrequently: true });
+      fullCtx.filter = "blur(10px)";
+      fullCtx.drawImage(grid, 0, 0, work, work);
+      return fullCtx.getImageData(0, 0, work, work).data;
+    };
+    const differs = (backdrop, threshold) => {
+      const mask = new Uint8Array(total);
+      for (let p = 0; p < total; p += 1) {
+        const i = p * 4;
+        const diff = Math.max(Math.abs(data[i] - backdrop[i]), Math.abs(data[i + 1] - backdrop[i + 1]), Math.abs(data[i + 2] - backdrop[i + 2]));
+        mask[p] = diff > threshold ? 1 : 0;
+      }
+      return mask;
+    };
+    let mask = differs(blurred(null), 30);
+    const grow = (source, steps, value) => {
+      let current = source;
+      for (let step = 0; step < steps; step += 1) {
+        const next = current.slice();
+        for (let p = 0; p < total; p += 1) {
+          if (current[p] === value) continue;
+          const x = p % work;
+          if ((x > 0 && current[p - 1] === value) || (x < work - 1 && current[p + 1] === value)
+            || (p >= work && current[p - work] === value) || (p < total - work && current[p + work] === value)) next[p] = value;
+        }
+        current = next;
+      }
+      return current;
+    };
+    const keepOut = grow(mask, 12, 1);
+    const weights = new Uint8Array(total);
+    for (let p = 0; p < total; p += 1) weights[p] = keepOut[p] ? 0 : 1;
+    mask = differs(blurred(weights), 16);
+
+    // A glossy floor: a row where the brightness steps sharply across most
+    // of the width. Everything that starts below it is a reflection.
+    let horizon = work;
+    let bestStep = 0;
+    for (let y = Math.round(work * 0.4); y < work * 0.92; y += 1) {
+      let step = 0;
+      for (let x = 0; x < work; x += 4) step += Math.abs(lum[(y + 2) * work + x] - lum[(y - 2) * work + x]);
+      step /= work / 4;
+      if (step > bestStep) {
+        bestStep = step;
+        horizon = y;
+      }
+    }
+    if (bestStep < 4) horizon = work;
+    // The floor edge itself is a thin line across the photo; drop mask
+    // pixels near it that have no product above and below.
+    if (horizon < work) {
+      const reach = 12 * work;
+      for (let y = Math.max(0, horizon - 10); y <= Math.min(work - 1, horizon + 10); y += 1) {
+        for (let x = 0; x < work; x += 1) {
+          const p = y * work + x;
+          if (mask[p] && !(p - reach >= 0 && mask[p - reach]) && !(p + reach < total && mask[p + reach])) mask[p] = 0;
+        }
+      }
+    }
+
+    // Close small gaps in the outline, then fill what it encloses.
+    const detected = mask;
+    mask = grow(grow(mask, 16, 1), 16, 0);
+    const outside = new Uint8Array(total);
+    const queue = [];
+    for (let x = 0; x < work; x += 1) queue.push(x, total - work + x);
+    for (let y = 0; y < work; y += 1) queue.push(y * work, y * work + work - 1);
+    for (const p of queue) if (!mask[p]) outside[p] = 1;
+    for (let k = 0; k < queue.length; k += 1) {
+      const p = queue[k];
+      if (!outside[p]) continue;
+      for (const n of neighbours(p, work, total)) {
+        if (!outside[n] && !mask[n]) {
+          outside[n] = 1;
+          queue.push(n);
+        }
+      }
+    }
+    // Small enclosed pockets that show the backdrop (inside a key ring,
+    // between parts) are background; large ones are dark parts of the
+    // product and stay.
+    const pocket = new Int32Array(total);
+    let pocketId = 0;
+    for (let start = 0; start < total; start += 1) {
+      if (outside[start] || mask[start] || pocket[start]) continue;
+      pocketId += 1;
+      const members = [start];
+      pocket[start] = pocketId;
+      for (let k = 0; k < members.length; k += 1) {
+        for (const n of neighbours(members[k], work, total)) {
+          if (!outside[n] && !mask[n] && !pocket[n]) {
+            pocket[n] = pocketId;
+            members.push(n);
+          }
+        }
+      }
+      if (members.length < total * 0.03) for (const p of members) outside[p] = 1;
+    }
+    // Smooth the filled outline, but keep fine detail that was clearly
+    // detected (a key ring, a chain).
+    smoothMask(outside, work, 7);
+    for (let p = 0; p < total; p += 1) if (detected[p] && !pocket[p]) outside[p] = 0;
+    const state = { width: work, height: work, data, background: outside };
+    keepMainProduct(state, { below: horizon + 3 });
+    let kept = 0;
+    for (let p = 0; p < total; p += 1) if (!outside[p]) kept += 1;
+    if (kept < total * 0.01 || kept > total * 0.6) return null;
+    if (looksLikeLeftoverLight(state)) return null;
+    const product = productCanvas(state);
+    if (!product || product.canvas.width < work * 0.05 || product.canvas.height < work * 0.05) return null;
+    return product;
+  }
+
+  // Rounds off a jagged mask edge: blur it and cut at the halfway level.
+  function smoothMask(background, width, radius) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = background.length / width;
+    const maskCtx = context(canvas, { willReadFrequently: true });
+    const pixels = maskCtx.createImageData(canvas.width, canvas.height);
+    for (let p = 0; p < background.length; p += 1) {
+      pixels.data[p * 4 + 3] = 255;
+      pixels.data[p * 4] = background[p] ? 0 : 255;
+    }
+    maskCtx.putImageData(pixels, 0, 0);
+    const blurred = document.createElement("canvas");
+    blurred.width = canvas.width;
+    blurred.height = canvas.height;
+    const blurCtx = context(blurred, { willReadFrequently: true });
+    blurCtx.fillStyle = "#000";
+    blurCtx.fillRect(0, 0, blurred.width, blurred.height);
+    blurCtx.filter = `blur(${radius}px)`;
+    blurCtx.drawImage(canvas, 0, 0);
+    const out = blurCtx.getImageData(0, 0, blurred.width, blurred.height).data;
+    for (let p = 0; p < background.length; p += 1) background[p] = out[p * 4] < 128 ? 1 : 0;
   }
 
   function hasDarkBackdrop(img) {
@@ -814,7 +1066,9 @@
 
     // Non-car photos that were made with the stand: move the product onto the
     // floating accessory look.
-    const standless = !stand && hasDarkBackdrop(img) ? extractFromStandPhoto(img) : null;
+    const standless = !stand && hasDarkBackdrop(img)
+      ? extractFromStandPhoto(img) || (!matchesAccessoryBackdrop(img) && extractFromDarkPhoto(img))
+      : null;
     if (standless) {
       photo.mode = "unstand";
       photo.variants = {};
@@ -824,7 +1078,7 @@
         placement = composeFloating(context(fresh), standless, { accent: variant === "accent" });
         photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
       }
-      photo.choice = placement.dark ? "accent" : "standard";
+      photo.choice = "standard";
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
         get: () => photo.variants[photo.choice],
