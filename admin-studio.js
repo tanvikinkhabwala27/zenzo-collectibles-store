@@ -164,24 +164,6 @@
     }
   }
 
-  function softHalo(ctx, product, x, y, strength) {
-    const halo = document.createElement("canvas");
-    halo.width = product.width;
-    halo.height = product.height;
-    const haloCtx = context(halo);
-    haloCtx.drawImage(product, 0, 0);
-    haloCtx.globalCompositeOperation = "source-in";
-    haloCtx.fillStyle = `rgba(200, 205, 215, ${0.2 * strength})`;
-    haloCtx.fillRect(0, 0, halo.width, halo.height);
-    ctx.save();
-    ctx.filter = "blur(16px)";
-    ctx.drawImage(halo, x, y);
-    ctx.filter = "blur(5px)";
-    ctx.globalAlpha = 0.7;
-    ctx.drawImage(halo, x, y);
-    ctx.restore();
-  }
-
   function lightProduct(product, strength) {
     const lit = document.createElement("canvas");
     lit.width = product.width;
@@ -270,6 +252,180 @@
     return queue.length;
   }
 
+  // AI cut-out: the U²-Net-p segmentation model (Apache-2.0) run in the
+  // browser with ONNX Runtime Web (MIT), both served from assets/studio.
+  // It finds the product itself, so fuzzy edges, dark parts and busy or
+  // textured backgrounds work, unlike the colour-based flood fill below,
+  // which stays as the fallback when the model cannot load.
+  const modelSize = 320;
+  let segmenter = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("The photo tool could not load."));
+      document.head.append(script);
+    });
+  }
+
+  function loadSegmenter() {
+    segmenter ||= (async () => {
+      if (!window.ort) await loadScript("assets/studio/ort.wasm.min.js");
+      window.ort.env.wasm.wasmPaths = new URL("assets/studio/", window.location.href).href;
+      window.ort.env.wasm.numThreads = 1;
+      return window.ort.InferenceSession.create("assets/studio/u2netp.onnx", { executionProviders: ["wasm"] });
+    })().catch((error) => {
+      segmenter = null;
+      throw error;
+    });
+    return segmenter;
+  }
+
+  // Probability (0 to 1) that each pixel of a width x height copy of the
+  // photo is product.
+  async function productProbability(img, width, height) {
+    const session = await loadSegmenter();
+    const input = document.createElement("canvas");
+    input.width = modelSize;
+    input.height = modelSize;
+    const inputCtx = context(input, { willReadFrequently: true });
+    inputCtx.drawImage(img, 0, 0, modelSize, modelSize);
+    const pixels = inputCtx.getImageData(0, 0, modelSize, modelSize).data;
+    const plane = modelSize * modelSize;
+    const tensor = new Float32Array(plane * 3);
+    const mean = [0.485, 0.456, 0.406];
+    const deviation = [0.229, 0.224, 0.225];
+    for (let p = 0; p < plane; p += 1) {
+      for (let c = 0; c < 3; c += 1) tensor[c * plane + p] = (pixels[p * 4 + c] / 255 - mean[c]) / deviation[c];
+    }
+    const feeds = { [session.inputNames[0]]: new window.ort.Tensor("float32", tensor, [1, 3, modelSize, modelSize]) };
+    const result = await session.run(feeds);
+    const map = result[session.outputNames[0]].data;
+    let low = Infinity;
+    let high = -Infinity;
+    for (let p = 0; p < plane; p += 1) {
+      if (map[p] < low) low = map[p];
+      if (map[p] > high) high = map[p];
+    }
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = modelSize;
+    maskCanvas.height = modelSize;
+    const maskCtx = context(maskCanvas, { willReadFrequently: true });
+    const mask = maskCtx.createImageData(modelSize, modelSize);
+    for (let p = 0; p < plane; p += 1) {
+      const value = Math.round(((map[p] - low) / (high - low || 1)) * 255);
+      mask.data[p * 4] = value;
+      mask.data[p * 4 + 3] = 255;
+    }
+    maskCtx.putImageData(mask, 0, 0);
+    const full = document.createElement("canvas");
+    full.width = width;
+    full.height = height;
+    const fullCtx = context(full, { willReadFrequently: true });
+    fullCtx.drawImage(maskCanvas, 0, 0, width, height);
+    const scaled = fullCtx.getImageData(0, 0, width, height).data;
+    const probability = new Float32Array(width * height);
+    for (let p = 0; p < probability.length; p += 1) probability[p] = scaled[p * 4] / 255;
+    return probability;
+  }
+
+  // Same result shape as prepareCutOut, with soft edges kept in the alpha
+  // channel. Returns null when the model is unavailable or finds nothing.
+  async function aiCutOut(img) {
+    const scale = Math.min(1, workingSize / Math.max(img.width, img.height));
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+    let probability;
+    try {
+      probability = await productProbability(img, width, height);
+    } catch {
+      return null;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = context(canvas, { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, width, height);
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const total = width * height;
+    const background = new Uint8Array(total);
+    let kept = 0;
+    for (let p = 0; p < total; p += 1) {
+      // Firm up the upscaled mask while keeping a soft edge.
+      const t = Math.min(1, Math.max(0, (probability[p] - 0.25) / 0.5));
+      const alpha = t * t * (3 - 2 * t);
+      data[p * 4 + 3] = Math.round(alpha * 255);
+      if (alpha < 0.04) background[p] = 1;
+      else kept += 1;
+    }
+    if (kept < total * 0.005 || kept > total * 0.95) return null;
+    const state = { width, height, data, background };
+
+    // On a plain backdrop, clear backdrop still showing through loops (a key
+    // ring) and take the backdrop's colour out of the soft edges, so no
+    // light or coloured fringe shows on the dark stage.
+    const border = [];
+    for (let x = 0; x < width; x += 1) border.push(x, (height - 1) * width + x);
+    for (let y = 0; y < height; y += 1) border.push(y * width, y * width + width - 1);
+    const median = (offset) => border.map((p) => data[p * 4 + offset]).sort((a, b) => a - b)[Math.floor(border.length / 2)];
+    const backdrop = [median(0), median(1), median(2)];
+    const plain = border.filter((p) => distance(data, p * 4, ...backdrop) < 60).length / border.length;
+    if (plain > 0.6) {
+      // Twice: clearing the middle of a key ring leaves slivers along its
+      // inside edge that the second pass picks up.
+      removeEnclosedBackdrop(state, backdrop);
+      removeEnclosedBackdrop(state, backdrop, { minShare: 0.0004 });
+      // The model's outline runs a little wide: backdrop-coloured pixels next
+      // to the background are backdrop where the model is unsure, and also
+      // where it is sure but close to the outline. White parts deeper inside
+      // the product are never touched.
+      // Close to the outline the same holds even where the model is sure.
+      const reach = Math.round(Math.max(width, height) * 0.011);
+      const backdropSum = backdrop[0] + backdrop[1] + backdrop[2];
+      const lum = (i) => data[i] + data[i + 1] + data[i + 2];
+      // A lighter or darker shade of the backdrop (a fold, a cast shadow)
+      // that is smooth; metal and fibres have sharp detail and stay.
+      const backdropShade = (p) => {
+        const i = p * 4;
+        const sum = lum(i);
+        const level = sum / backdropSum;
+        if (level < 0.45 || level > 1.15) return false;
+        for (let c = 0; c < 3; c += 1) if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.025) return false;
+        const x = p % width;
+        for (const n of [x > 1 ? p - 2 : -1, x < width - 2 ? p + 2 : -1, p - 2 * width, p + 2 * width]) {
+          if (n >= 0 && n < total && Math.abs(lum(n * 4) - sum) > 54) return false;
+        }
+        return true;
+      };
+      let edge = [];
+      for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
+      for (let step = 1; edge.length; step += 1) {
+        const next = [];
+        for (const p of edge) {
+          for (const n of neighbours(p, width, total)) {
+            if (background[n] || (step > reach && data[n * 4 + 3] > 235)) continue;
+            if (distance(data, n * 4, ...backdrop) >= 70 && !backdropShade(n)) continue;
+            background[n] = 1;
+            next.push(n);
+          }
+        }
+        edge = next;
+      }
+      for (let p = 0; p < total; p += 1) {
+        const i = p * 4;
+        const alpha = data[i + 3] / 255;
+        if (background[p] || alpha > 0.97) continue;
+        for (let c = 0; c < 3; c += 1) {
+          data[i + c] = Math.min(255, Math.max(0, (data[i + c] - (1 - alpha) * backdrop[c]) / Math.max(alpha, 0.15)));
+        }
+      }
+    }
+    keepMainProduct(state);
+    return state;
+  }
+
   // Prepares a working copy of the photo and removes a plain background by
   // flooding in from the edges. Returns null when the edges are too busy.
   function prepareCutOut(img) {
@@ -345,10 +501,10 @@
   // parts) cannot be reached from the photo's edges. Remove sizeable patches
   // that are flat and almost exactly the backdrop colour; shaded product
   // surfaces such as white packaging vary too much to qualify.
-  function removeEnclosedBackdrop(state, [r, g, b]) {
+  function removeEnclosedBackdrop(state, [r, g, b], { minShare = 0.002 } = {}) {
     const { data, background, width } = state;
     const total = background.length;
-    const minPatch = total * 0.002;
+    const minPatch = total * minShare;
     let removed = 0;
     // First flat patches close to the backdrop colour, then (with a looser
     // colour match) textured ones such as fabric showing inside a key ring.
@@ -544,9 +700,6 @@
       rimLight(ctx, scaled, x, y, strength);
       ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
     } else {
-      // Dark products get a faint neutral halo, like a studio back light,
-      // so black parts keep their outline on the dark background.
-      if (darkness > 0.1) softHalo(ctx, scaled, x, y, Math.min(1, darkness));
       ctx.drawImage(scaled, x, y, width, height);
     }
     if (!accessoryBackdrop) vignette(ctx);
@@ -797,6 +950,11 @@
     for (let p = 0; p < width * height; p += 1) {
       if (label[p] && !keep[label[p]]) background[p] = 1;
     }
+  }
+
+  async function aiProduct(img) {
+    const state = await aiCutOut(img);
+    return state && productCanvas(state);
   }
 
   // True when the photo already sits on the accessory background (the launch
@@ -1114,7 +1272,7 @@
     // Non-car photos that were made with the stand: move the product onto the
     // floating accessory look.
     const standless = !stand && hasDarkBackdrop(img)
-      ? extractFromStandPhoto(img) || (!matchesAccessoryBackdrop(img) && extractFromDarkPhoto(img))
+      ? extractFromStandPhoto(img) || (!matchesAccessoryBackdrop(img) && (await aiProduct(img) || extractFromDarkPhoto(img)))
       : null;
     if (standless) {
       photo.mode = "unstand";
@@ -1151,7 +1309,7 @@
       return photo;
     }
 
-    const initial = prepareCutOut(img);
+    const initial = (await aiCutOut(img)) || prepareCutOut(img);
     const product = initial && productCanvas(initial);
     if (!product) {
       photo.mode = "studio-photo";

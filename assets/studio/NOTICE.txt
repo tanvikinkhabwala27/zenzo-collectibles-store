@@ -1,0 +1,9 @@
+Files in this folder power the background removal in the admin photo tool.
+
+u2netp.onnx
+  U²-Net (small version) by Xuebin Qin et al., Apache License 2.0.
+  https://github.com/xuebinqin/U-2-Net
+
+ort.wasm.min.js, ort-wasm-simd-threaded.mjs, ort-wasm-simd-threaded.wasm
+  ONNX Runtime Web 1.20.1, Microsoft, MIT License.
+  https://github.com/microsoft/onnxruntime

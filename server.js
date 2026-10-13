@@ -62,7 +62,10 @@ const mimeTypes = {
   ".jpeg": "image/jpeg",
   ".png": "image/png",
   ".svg": "image/svg+xml",
-  ".webp": "image/webp"
+  ".webp": "image/webp",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".onnx": "application/octet-stream"
 };
 
 const securityHeaders = {
