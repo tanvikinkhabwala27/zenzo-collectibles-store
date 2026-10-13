@@ -353,6 +353,40 @@ function slugify(value) {
   return String(value).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+// Colour options: each colour is its own product (own photo, price and
+// stock) and colours of the same product share a group key.
+function cleanColour(input) {
+  const colorName = cleanText(input.colorName, "Colour name", { max: 40 });
+  const colorHex = String(input.colorHex || "").trim();
+  if (colorHex && !/^#[0-9a-f]{6}$/i.test(colorHex)) throw badRequest("Pick the colour with the colour picker.");
+  return { colorName, colorHex: colorName ? colorHex : "" };
+}
+
+function displayName(product) {
+  return product.colorName ? `${product.name} – ${product.colorName}` : product.name;
+}
+
+// Puts a product into the colour group of another product, or takes it out
+// when variantOf is empty. Returns an error message, or null.
+function setColourGroup(products, product, variantOf) {
+  if (variantOf === undefined) return null;
+  if (!variantOf) {
+    // Its own id may still be the group key of other colours, so use a key
+    // nobody else has.
+    product.group = `${product.id}:single`;
+    return null;
+  }
+  const base = products.find((item) => item.id === variantOf);
+  if (!base) return "The product to group with no longer exists.";
+  if (base.id === product.id) return null;
+  const group = base.group && !base.group.endsWith(":single") ? base.group : base.id;
+  base.group = group;
+  product.group = group;
+  // Colours belong in the same part of the shop as the product they vary.
+  if (base.subcategory && !product.subcategory) product.subcategory = base.subcategory;
+  return null;
+}
+
 function normalizeProduct(input) {
   const name = cleanText(input.name, "Product name", { required: true });
   return {
@@ -369,7 +403,8 @@ function normalizeProduct(input) {
     color: "#242424",
     bg: "#f8f7f3",
     glass: "#ffffff",
-    notes: cleanText(input.notes, "Notes", { max: 2000 })
+    notes: cleanText(input.notes, "Notes", { max: 2000 }),
+    ...cleanColour(input)
   };
 }
 
@@ -913,10 +948,15 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/admin/products") {
-    const product = normalizeProduct(await readBody(req, maxAdminBodyBytes));
-    await updateJson(productsFile, [], (products) => {
+    const body = await readBody(req, maxAdminBodyBytes);
+    const product = normalizeProduct(body);
+    const problem = await updateJson(productsFile, [], (products) => {
+      const error = setColourGroup(products, product, body.variantOf ? String(body.variantOf) : undefined);
+      if (error) return error;
       products.unshift(product);
+      return null;
     });
+    if (problem) return send(res, 400, { error: problem });
     return send(res, 201, product);
   }
 
@@ -934,13 +974,18 @@ async function handleApi(req, res, url) {
       notes: cleanText(body.notes, "Notes", { max: 2000 })
     };
     if (body.image) changes.image = cleanImage(body.image);
-    const product = await updateJson(productsFile, [], (products) => {
+    if ("colorName" in body) Object.assign(changes, cleanColour(body));
+    const result = await updateJson(productsFile, [], (products) => {
       const match = products.find((item) => item.id === id);
-      if (match) Object.assign(match, changes);
-      return match || null;
+      if (!match) return null;
+      const error = "variantOf" in body ? setColourGroup(products, match, String(body.variantOf || "")) : null;
+      if (error) return { error };
+      Object.assign(match, changes);
+      return { product: match };
     });
-    if (!product) return send(res, 404, { error: "Product not found." });
-    return send(res, 200, product);
+    if (!result) return send(res, 404, { error: "Product not found." });
+    if (result.error) return send(res, 400, { error: result.error });
+    return send(res, 200, result.product);
   }
 
   if (req.method === "DELETE" && url.pathname.startsWith("/api/admin/products/")) {
@@ -1020,7 +1065,7 @@ async function handleApi(req, res, url) {
       if (quantity > product.stock) {
         return send(res, 409, { error: `${product.name} has only ${product.stock} left. Please update your cart.` });
       }
-      items.push({ id, name: product.name, price: product.price, quantity });
+      items.push({ id, name: displayName(product), price: product.price, quantity });
     }
 
     if (!items.length) return send(res, 400, { error: "Cart is empty." });

@@ -82,6 +82,7 @@ function showTab(name) {
     productsMessage.textContent = "";
     renderProducts();
   }
+  if (name === "add") refreshVariantSelect();
 }
 
 function isPaidOrder(order) {
@@ -361,10 +362,42 @@ document.addEventListener("click", async (event) => {
   if (!removed) preview.querySelector("p").textContent = "Tap directly on the leftover background inside the product to remove it.";
 });
 
+let knownProducts = [];
+
+function productLabel(product) {
+  return product.colorName ? `${product.name} – ${product.colorName}` : product.name;
+}
+
+function variantOptions(selectedId, excludeId) {
+  return `<option value="">Not a colour of another product</option>${knownProducts
+    .filter((product) => product.id !== excludeId)
+    .map((product) => `<option value="${escapeHtml(product.id)}" ${product.id === selectedId ? "selected" : ""}>${escapeHtml(productLabel(product))}</option>`)
+    .join("")}`;
+}
+
+// The product this one is currently grouped with, if any.
+function groupedWith(product) {
+  if (!product.group || product.group.endsWith(":single")) return "";
+  const other = knownProducts.find((item) => item.id !== product.id && (item.group || item.id) === product.group);
+  return other ? other.id : "";
+}
+
+async function refreshVariantSelect() {
+  try {
+    knownProducts = await api("/api/products");
+  } catch {
+    return;
+  }
+  const select = productForm.querySelector("[data-variant-select]");
+  const current = select.value;
+  select.innerHTML = variantOptions(current, null);
+}
+
 async function renderProducts() {
   let products = [];
   try {
     products = await api("/api/products");
+    knownProducts = products;
   } catch (error) {
     productsList.innerHTML = `<p class="empty-state">${error.message}</p>`;
     return;
@@ -381,7 +414,7 @@ async function renderProducts() {
     <div class="admin-product">
       ${product.image ? `<img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}">` : ""}
       <div>
-        <h3>${escapeHtml(product.name)}</h3>
+        <h3>${escapeHtml(product.name)}${product.colorName ? ` <span class="admin-colour"><span class="admin-colour__dot" style="background: ${escapeHtml(product.colorHex || "#8a8f98")}"></span>${escapeHtml(product.colorName)}</span>` : ""}</h3>
         <p>${escapeHtml(collection)} &middot; ${escapeHtml(product.series)} &middot; ${money.format(product.price)} &middot; Stock ${product.stock}</p>
       </div>
       <button class="remove-button" type="button" data-delete="${escapeHtml(product.id)}">Delete</button>
@@ -409,6 +442,18 @@ async function renderProducts() {
           <label class="field field--full">
             Notes
             <textarea name="notes">${escapeHtml(product.notes)}</textarea>
+          </label>
+          <label class="field field--full">
+            Colour of
+            <select name="variantOf">${variantOptions(groupedWith(product), product.id)}</select>
+          </label>
+          <label class="field">
+            Colour name
+            <input name="colorName" maxlength="40" value="${escapeHtml(product.colorName || "")}" placeholder="e.g. Pink">
+          </label>
+          <label class="field">
+            Colour dot
+            <input name="colorHex" type="color" value="${escapeHtml(product.colorHex || "#e0457b")}">
           </label>
           <label class="field field--full">
             Replace photo (optional)
@@ -448,6 +493,23 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
+productForm.querySelector("[data-variant-select]").addEventListener("change", (event) => {
+  const base = knownProducts.find((product) => product.id === event.target.value);
+  if (!base) return;
+  const fields = productForm.elements;
+  if (!fields.name.value) fields.name.value = base.name;
+  fields.collection.value = base.collection || "Hot Wheels";
+  fields.series.value = base.series || fields.series.value;
+  if (!fields.price.value) fields.price.value = base.price;
+  if (base.year) fields.year.value = base.year;
+  if (base.notes && !fields.notes.dataset.edited) fields.notes.value = base.notes;
+  fields.colorName.focus();
+});
+
+productForm.elements.notes.addEventListener("input", () => {
+  productForm.elements.notes.dataset.edited = "true";
+});
+
 productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(productForm);
@@ -473,7 +535,10 @@ productForm.addEventListener("submit", async (event) => {
         stock: form.get("stock"),
         image,
         imageAlt: name,
-        notes: form.get("notes")
+        notes: form.get("notes"),
+        variantOf: form.get("variantOf") || "",
+        colorName: form.get("colorName") || "",
+        colorHex: form.get("colorHex") || ""
       })
     });
     productForm.reset();
@@ -484,6 +549,7 @@ productForm.addEventListener("submit", async (event) => {
     productForm.elements.year.value = "2025";
     productForm.elements.stock.value = "1";
     productForm.elements.notes.value = "Sealed Hot Wheels pack photographed from available stock.";
+    delete productForm.elements.notes.dataset.edited;
     showTab("products");
     productsMessage.textContent = `"${name}" was added to the shop.`;
   } catch (error) {
@@ -504,7 +570,10 @@ productsList.addEventListener("submit", async (event) => {
       series: form.get("series"),
       price: form.get("price"),
       stock: form.get("stock"),
-      notes: form.get("notes")
+      notes: form.get("notes"),
+      variantOf: form.get("variantOf") || "",
+      colorName: form.get("colorName") || "",
+      colorHex: form.get("colorHex") || ""
     };
     const image = await photoFor(editForm);
     if (image) changes.image = image;

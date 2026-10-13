@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-49">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-50">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -145,6 +145,24 @@
                 Stock
                 <input name="stock" inputmode="numeric" value="1" required>
               </label>
+              <fieldset class="colour-fields field--full">
+                <legend>Colour option (optional)</legend>
+                <p class="checkout-note">For a product you sell in several colours, add each colour as its own product and pick the product it is a colour of. The shop shows them as one product with colour dots.</p>
+                <label class="field field--full">
+                  Colour of
+                  <select name="variantOf" data-variant-select>
+                    <option value="">Not a colour of another product</option>
+                  </select>
+                </label>
+                <label class="field">
+                  Colour name
+                  <input name="colorName" maxlength="40" placeholder="e.g. Pink">
+                </label>
+                <label class="field">
+                  Colour dot
+                  <input name="colorHex" type="color" value="#e0457b">
+                </label>
+              </fieldset>
               <label class="field field--full">
                 Product photo
                 <input name="image" type="file" accept="image/*">
@@ -170,6 +188,6 @@
     </main>
 
     <script src="admin-studio.js?v=zenzo-race-theme-40"></script>
-    <script src="admin.js?v=zenzo-race-theme-39"></script>
+    <script src="admin.js?v=zenzo-race-theme-40"></script>
   </body>
 </html>

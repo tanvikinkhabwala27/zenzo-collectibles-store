@@ -84,7 +84,7 @@ function renderCheckout() {
     orderList.innerHTML = orderLines.map(({ item, quantity }) => `
       <div class="order-line">
         <div>
-          <h3>${escapeHtml(item.name)}</h3>
+          <h3>${escapeHtml(item.colorName ? `${item.name} – ${item.colorName}` : item.name)}</h3>
           <p>Qty ${quantity}</p>
         </div>
         <strong>${money.format(item.price * quantity)}</strong>

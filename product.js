@@ -290,6 +290,31 @@ function renderMissingProduct() {
   `;
 }
 
+function groupKey(item) {
+  return item.group || item.id;
+}
+
+function colourPicker() {
+  const key = groupKey(product);
+  // The original product (whose id is the group key) comes first.
+  const variants = inventory.filter((item) => groupKey(item) === key)
+    .sort((a, b) => Number(b.id === key) - Number(a.id === key));
+  if (variants.length < 2) return "";
+  const buttons = variants.map((variant) => {
+    const label = variant.colorName || "Default";
+    const soldOut = !(variant.stock > 0);
+    return `<button class="color-swatch color-swatch--large${variant.id === product.id ? " is-selected" : ""}${soldOut ? " is-sold-out" : ""}" type="button"
+      style="--swatch: ${variant.colorHex || "#8a8f98"}" data-variant="${variant.id}"
+      aria-label="${label}${soldOut ? " (sold out)" : ""}" aria-pressed="${variant.id === product.id}" title="${label}${soldOut ? " – sold out" : ""}"></button>`;
+  }).join("");
+  return `
+    <div class="color-options color-options--detail">
+      <span class="color-options__label">Colour: <strong>${product.colorName || "Default"}</strong></span>
+      <div class="color-swatches" role="group" aria-label="Colours">${buttons}</div>
+    </div>
+  `;
+}
+
 function renderProduct() {
   const inCart = cartQuantity(product.id);
   const remaining = product.stock - inCart;
@@ -301,7 +326,7 @@ function renderProduct() {
   if (activeImageIndex >= gallery.length) activeImageIndex = 0;
   const activeImage = gallery[activeImageIndex];
   const imageSrc = activeImage && activeImage.startsWith("data:") ? activeImage : `${activeImage}?v=${assetVersion}`;
-  document.title = `${product.name} | Zenzo`;
+  document.title = `${product.colorName ? `${product.name} – ${product.colorName}` : product.name} | Zenzo`;
 
   productDetail.innerHTML = `
     <div class="product-detail__media${soldOut ? " is-sold-out" : ""}">
@@ -316,6 +341,7 @@ function renderProduct() {
       <p class="eyebrow">${productCollection(product)}${product.subcategory ? ` / ${product.subcategory}` : ""}</p>
       <h1>${product.name}</h1>
       <strong class="product-detail__price">${money.format(product.price)}</strong>
+      ${colourPicker()}
       <p class="meta">
         <span>${product.series}</span>
         <span>${product.year}</span>
@@ -346,6 +372,14 @@ async function init() {
   }
   renderProduct();
   productDetail.addEventListener("click", (event) => {
+    const swatch = event.target.closest("[data-variant]");
+    if (swatch) {
+      product = inventory.find((item) => item.id === swatch.dataset.variant) || product;
+      activeImageIndex = 0;
+      history.replaceState(null, "", `?id=${encodeURIComponent(product.id)}`);
+      renderProduct();
+      return;
+    }
     const galleryButton = event.target.closest("[data-gallery-index]");
     if (galleryButton) {
       activeImageIndex = Number(galleryButton.dataset.galleryIndex);

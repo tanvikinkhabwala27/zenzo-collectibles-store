@@ -343,8 +343,9 @@ function filteredInventory() {
   const query = state.query.trim().toLowerCase();
   const cars = inventory.filter((car) => {
     const matchesCollection = state.collection === "all" || productCollection(car) === state.collection;
-    const matchesSubcategory = state.subcategory === "all" || car.subcategory === state.subcategory;
-    const haystack = `${car.name} ${productCollection(car)} ${car.subcategory || ""} ${car.series} ${car.year} ${car.condition}`.toLowerCase();
+    // Products added in admin have no subcategory; show them under any.
+    const matchesSubcategory = state.subcategory === "all" || !car.subcategory || car.subcategory === state.subcategory;
+    const haystack = `${car.name} ${car.colorName || ""} ${productCollection(car)} ${car.subcategory || ""} ${car.series} ${car.year} ${car.condition}`.toLowerCase();
     return matchesCollection && matchesSubcategory && haystack.includes(query);
   });
 
@@ -363,7 +364,36 @@ function cartQuantity(id) {
   return state.cart.filter((itemId) => itemId === id).length;
 }
 
-function carMarkup(car) {
+// Colours of the same product share a group; the card shows one colour at a
+// time and the swatches switch between them.
+const variantChoice = {};
+
+function groupKey(product) {
+  return product.group || product.id;
+}
+
+function displayName(product) {
+  return product.colorName ? `${product.name} – ${product.colorName}` : product.name;
+}
+
+function swatchesMarkup(selected, variants) {
+  if (variants.length < 2) return "";
+  const buttons = variants.map((variant) => {
+    const label = variant.colorName || "Default";
+    const soldOut = !(variant.stock > 0);
+    return `<button class="color-swatch${variant.id === selected.id ? " is-selected" : ""}${soldOut ? " is-sold-out" : ""}" type="button"
+      style="--swatch: ${variant.colorHex || "#8a8f98"}" data-variant="${variant.id}" data-group="${groupKey(variant)}"
+      aria-label="${label}${soldOut ? " (sold out)" : ""}" aria-pressed="${variant.id === selected.id}" title="${label}${soldOut ? " – sold out" : ""}"></button>`;
+  }).join("");
+  return `
+    <div class="color-options">
+      <span class="color-options__label">Colour: <strong>${selected.colorName || "Default"}</strong></span>
+      <div class="color-swatches" role="group" aria-label="Colours">${buttons}</div>
+    </div>
+  `;
+}
+
+function carMarkup(car, variants = [car]) {
   const inCart = cartQuantity(car.id);
   const remaining = car.stock - inCart;
   const soldOut = !(car.stock > 0);
@@ -410,6 +440,7 @@ function carMarkup(car) {
           <span>${car.year}</span>
           ${stockLabel ? `<span>${stockLabel}</span>` : ""}
         </p>
+        ${swatchesMarkup(car, variants)}
         <a class="details-link" href="${detailsHref}">View details</a>
         <button class="add-button" type="button" data-add="${car.id}" ${remaining <= 0 ? "disabled" : ""}>${buttonText}</button>
       </div>
@@ -436,7 +467,21 @@ function emptyMessage() {
 
 function renderProducts() {
   const cars = filteredInventory();
-  productGrid.innerHTML = cars.map(carMarkup).join("");
+  // One card per product; colours that match the filters share the card.
+  const groups = new Map();
+  for (const car of cars) {
+    const key = groupKey(car);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(car);
+  }
+  productGrid.innerHTML = [...groups.entries()].map(([key, list]) => {
+    // The original product (whose id is the group key) comes first.
+    const variants = [...list].sort((a, b) => Number(b.id === key) - Number(a.id === key));
+    const chosen = variants.find((variant) => variant.id === variantChoice[key])
+      || variants.find((variant) => variant.stock > 0)
+      || variants[0];
+    return carMarkup(chosen, variants);
+  }).join("");
   emptyState.hidden = cars.length > 0;
   if (!cars.length) emptyState.textContent = emptyMessage();
   if (subcategoryBar) subcategoryBar.hidden = state.collection !== "Accessories";
@@ -460,7 +505,7 @@ function renderCart() {
       return `
         <div class="cart-item">
           <div>
-            <h3>${car.name}</h3>
+            <h3>${displayName(car)}</h3>
             <p>${car.series} &middot; Qty ${quantity}</p>
           </div>
           <strong>${money.format(car.price * quantity)}</strong>
@@ -489,6 +534,12 @@ function hideCart() {
 }
 
 productGrid.addEventListener("click", (event) => {
+  const swatch = event.target.closest("[data-variant]");
+  if (swatch) {
+    variantChoice[swatch.dataset.group] = swatch.dataset.variant;
+    renderProducts();
+    return;
+  }
   const button = event.target.closest("[data-add]");
   if (!button) {
     const card = event.target.closest("[data-details]");
