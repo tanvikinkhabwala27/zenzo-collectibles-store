@@ -171,7 +171,7 @@
     const haloCtx = context(halo);
     haloCtx.drawImage(product, 0, 0);
     haloCtx.globalCompositeOperation = "source-in";
-    haloCtx.fillStyle = `rgba(200, 205, 215, ${0.32 * strength})`;
+    haloCtx.fillStyle = `rgba(200, 205, 215, ${0.2 * strength})`;
     haloCtx.fillRect(0, 0, halo.width, halo.height);
     ctx.save();
     ctx.filter = "blur(16px)";
@@ -311,25 +311,33 @@
     const sum = r + g + b;
     if (sum < 90) return;
     const tone = [r / sum, g / sum, b / sum];
-    if (Math.max(...tone.map((t) => Math.abs(t - 1 / 3))) < 0.02) return;
+    // On neutral backdrops (white cloth, grey paper) only soft shading close
+    // to the backdrop is taken, and only near the removed background, so
+    // grey or silver product parts stay.
+    const neutral = Math.max(...tone.map((t) => Math.abs(t - 1 / 3))) < 0.02;
+    const [low, steps] = neutral ? [0.68, Math.round(width * 0.03)] : [0.35, Infinity];
     const isShadow = (p) => {
       const i = p * 4;
       const pixelSum = data[i] + data[i + 1] + data[i + 2];
       const level = pixelSum / sum;
-      if (level < 0.35 || level > 1.05 || pixelSum < 30) return false;
+      if (level < low || level > 1.05 || pixelSum < 30) return false;
       return Math.abs(data[i] / pixelSum - tone[0]) < 0.018
         && Math.abs(data[i + 1] / pixelSum - tone[1]) < 0.018
         && Math.abs(data[i + 2] / pixelSum - tone[2]) < 0.018;
     };
-    const queue = [];
+    let queue = [];
     for (let p = 0; p < total; p += 1) if (background[p]) queue.push(p);
-    for (let k = 0; k < queue.length; k += 1) {
-      for (const n of neighbours(queue[k], width, total)) {
-        if (!background[n] && isShadow(n)) {
-          background[n] = 1;
-          queue.push(n);
+    for (let step = 0; step < steps && queue.length; step += 1) {
+      const next = [];
+      for (const p of queue) {
+        for (const n of neighbours(p, width, total)) {
+          if (!background[n] && isShadow(n)) {
+            background[n] = 1;
+            next.push(n);
+          }
         }
       }
+      queue = next;
     }
   }
 
@@ -340,34 +348,73 @@
   function removeEnclosedBackdrop(state, [r, g, b]) {
     const { data, background, width } = state;
     const total = background.length;
-    const seen = new Uint8Array(total);
     const minPatch = total * 0.002;
     let removed = 0;
-    for (let start = 0; start < total; start += 1) {
-      if (background[start] || seen[start] || distance(data, start * 4, r, g, b) >= 24) continue;
-      const patch = [start];
-      seen[start] = 1;
-      let sum = 0;
-      let sumSquares = 0;
-      for (let k = 0; k < patch.length; k += 1) {
-        const p = patch[k];
-        const light = data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2];
-        sum += light;
-        sumSquares += light * light;
-        for (const n of neighbours(p, width, total)) {
-          if (seen[n] || background[n] || distance(data, n * 4, r, g, b) >= 24) continue;
-          seen[n] = 1;
-          patch.push(n);
+    // First flat patches close to the backdrop colour, then (with a looser
+    // colour match) textured ones such as fabric showing inside a key ring.
+    for (const [tolerance, textured] of [[24, false], [55, true]]) {
+      const seen = new Uint8Array(total);
+      for (let start = 0; start < total; start += 1) {
+        if (background[start] || seen[start] || distance(data, start * 4, r, g, b) >= tolerance) continue;
+        const patch = [start];
+        seen[start] = 1;
+        let sum = 0;
+        let sumSquares = 0;
+        for (let k = 0; k < patch.length; k += 1) {
+          const p = patch[k];
+          const light = data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2];
+          sum += light;
+          sumSquares += light * light;
+          for (const n of neighbours(p, width, total)) {
+            if (seen[n] || background[n] || distance(data, n * 4, r, g, b) >= tolerance) continue;
+            seen[n] = 1;
+            patch.push(n);
+          }
         }
-      }
-      const mean = sum / patch.length;
-      const spread = Math.sqrt(Math.max(0, sumSquares / patch.length - mean * mean)) / 3;
-      if (patch.length >= minPatch && spread < 6) {
-        for (const p of patch) background[p] = 1;
-        removed += patch.length;
+        if (patch.length < minPatch) continue;
+        const mean = sum / patch.length;
+        const spread = Math.sqrt(Math.max(0, sumSquares / patch.length - mean * mean)) / 3;
+        // Flat patches are backdrop. Textured ones are backdrop only when a
+        // thin part of the product surrounds them, like a key ring; white
+        // parts set inside thicker product (the pads of a paw) stay.
+        if (textured ? thinlyEnclosed(state, patch) : spread < 6) {
+          for (const p of patch) background[p] = 1;
+          removed += patch.length;
+        }
       }
     }
     return removed;
+  }
+
+  // True when the background outside is reached within a few pixels of the
+  // patch, all along a good part of its edge.
+  function thinlyEnclosed(state, patch) {
+    const { background, width } = state;
+    const total = background.length;
+    const reach = Math.max(8, Math.round(Math.max(width, total / width) * 0.016));
+    const seen = new Set(patch);
+    let frontier = patch;
+    let edge = 0;
+    let open = 0;
+    for (let step = 1; step <= reach && frontier.length; step += 1) {
+      const next = [];
+      for (const p of frontier) {
+        for (const n of neighbours(p, width, total)) {
+          if (seen.has(n)) continue;
+          seen.add(n);
+          if (step === 1) edge += 1;
+          if (background[n]) {
+            open += 1;
+            continue;
+          }
+          next.push(n);
+        }
+      }
+      frontier = next;
+    }
+    // A thin surround lets the growth reach the outside along most of the
+    // patch's edge; a thick one never reaches it.
+    return edge > 0 && open / edge > 0.3;
   }
 
   // Removes the light halo of old backdrop that clings to cut edges.
