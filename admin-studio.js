@@ -29,34 +29,142 @@
     });
   }
 
+  // Edge lights like the showcase photos: a narrow red light at the far left
+  // and blue at the far right, falling off into the dark.
+  function drawLights(ctx, strength = 1) {
+    for (const [x, color] of [[0, "255, 36, 44"], [size, "45, 125, 255"]]) {
+      ctx.save();
+      ctx.translate(x, size * 0.4);
+      ctx.scale(0.42, 1);
+      const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.75);
+      // Many stops give a smooth falloff instead of a visible band edge.
+      for (const [stop, alpha] of [[0, 0.58], [0.12, 0.4], [0.28, 0.2], [0.48, 0.08], [0.72, 0.02], [1, 0]]) {
+        glow.addColorStop(stop, `rgba(${color}, ${alpha * strength})`);
+      }
+      ctx.fillStyle = glow;
+      ctx.fillRect(-size * 2, -size, size * 4, size * 2);
+      ctx.restore();
+    }
+  }
+
   function drawStage(ctx, { floor = true } = {}) {
-    ctx.fillStyle = "#040609";
+    ctx.fillStyle = "#05070b";
     ctx.fillRect(0, 0, size, size);
-    const red = ctx.createRadialGradient(0, size * 0.52, 0, 0, size * 0.52, size * 0.62);
-    red.addColorStop(0, "rgba(255, 40, 40, 0.55)");
-    red.addColorStop(0.35, "rgba(160, 20, 30, 0.22)");
-    red.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = red;
-    ctx.fillRect(0, 0, size, size);
-    const blue = ctx.createRadialGradient(size, size * 0.5, 0, size, size * 0.5, size * 0.62);
-    blue.addColorStop(0, "rgba(40, 130, 255, 0.6)");
-    blue.addColorStop(0.35, "rgba(20, 70, 170, 0.24)");
-    blue.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = blue;
-    ctx.fillRect(0, 0, size, size);
+    drawLights(ctx);
     if (!floor) return;
-    const floorTop = size * 0.68;
-    const floorGradient = ctx.createLinearGradient(0, floorTop, 0, size);
-    floorGradient.addColorStop(0, "rgba(22, 26, 34, 0.95)");
-    floorGradient.addColorStop(1, "rgba(4, 6, 9, 1)");
-    ctx.fillStyle = floorGradient;
-    ctx.fillRect(0, floorTop, size, size - floorTop);
-    const edge = ctx.createLinearGradient(0, 0, size, 0);
-    edge.addColorStop(0, "rgba(255, 60, 60, 0.35)");
-    edge.addColorStop(0.5, "rgba(255, 255, 255, 0.06)");
-    edge.addColorStop(1, "rgba(60, 150, 255, 0.35)");
+    // Glossy table the display base stands on, catching the coloured lights.
+    const tableTop = size * 0.8;
+    const table = ctx.createLinearGradient(0, tableTop, 0, size);
+    table.addColorStop(0, "#090b10");
+    table.addColorStop(1, "#020304");
+    ctx.fillStyle = table;
+    ctx.fillRect(0, tableTop, size, size - tableTop);
+    for (const [x, color] of [[0, "255, 40, 50"], [size, "50, 130, 255"]]) {
+      const pool = ctx.createRadialGradient(x, tableTop + size * 0.08, 0, x, tableTop + size * 0.08, size * 0.3);
+      pool.addColorStop(0, `rgba(${color}, 0.22)`);
+      pool.addColorStop(1, `rgba(${color}, 0)`);
+      ctx.fillStyle = pool;
+      ctx.fillRect(0, tableTop, size, size - tableTop);
+    }
+  }
+
+  // The black display base every product sits on, as in the showcase photos.
+  function drawPedestal(ctx, centerX, topY, width) {
+    const depth = size * 0.05;
+    const front = size * 0.8 - topY;
+    const left = centerX - width / 2;
+    const right = centerX + width / 2;
+    const inset = width * 0.035;
+    ctx.save();
+    // Top face, seen slightly from above.
+    ctx.beginPath();
+    ctx.moveTo(left + inset, topY - depth);
+    ctx.lineTo(right - inset, topY - depth);
+    ctx.lineTo(right, topY);
+    ctx.lineTo(left, topY);
+    ctx.closePath();
+    const top = ctx.createLinearGradient(0, topY - depth, 0, topY);
+    top.addColorStop(0, "#14171d");
+    top.addColorStop(1, "#1c2027");
+    ctx.fillStyle = top;
+    ctx.fill();
+    // Front face.
+    const face = ctx.createLinearGradient(0, topY, 0, topY + front);
+    face.addColorStop(0, "#0d0f13");
+    face.addColorStop(1, "#08090c");
+    ctx.fillStyle = face;
+    ctx.fillRect(left, topY, width, front);
+    // Edge highlight picking up the red and blue lights.
+    const edge = ctx.createLinearGradient(left, 0, right, 0);
+    edge.addColorStop(0, "rgba(255, 70, 70, 0.55)");
+    edge.addColorStop(0.5, "rgba(255, 255, 255, 0.12)");
+    edge.addColorStop(1, "rgba(70, 150, 255, 0.55)");
     ctx.fillStyle = edge;
-    ctx.fillRect(0, floorTop, size, 2);
+    ctx.fillRect(left, topY - 1, width, 2);
+    // Soft reflection of the base on the table.
+    ctx.globalAlpha = 0.35;
+    const mirror = ctx.createLinearGradient(0, topY + front, 0, topY + front * 1.8);
+    mirror.addColorStop(0, "rgba(18, 21, 27, 0.9)");
+    mirror.addColorStop(1, "rgba(5, 7, 11, 0)");
+    ctx.fillStyle = mirror;
+    ctx.fillRect(left, topY + front, width, front * 0.8);
+    ctx.restore();
+  }
+
+  // Average brightness of the visible product pixels (0 to 255).
+  function brightness(canvas) {
+    const { data } = context(canvas, { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      if (data[i + 3] < 200) continue;
+      sum += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      count += 1;
+    }
+    return count ? sum / count : 128;
+  }
+
+  // Red light from the left and blue from the right catching the product's
+  // edges, stronger for dark products so they stand out from the dark stage.
+  function rimLight(ctx, product, x, y, strength) {
+    const width = product.width;
+    const height = product.height;
+    const glow = document.createElement("canvas");
+    glow.width = width;
+    glow.height = height;
+    const glowCtx = context(glow);
+    for (const [offset, color] of [[-1, `rgba(255, 45, 55, ${0.32 * strength})`], [1, `rgba(55, 140, 255, ${0.3 * strength})`]]) {
+      glowCtx.clearRect(0, 0, width, height);
+      glowCtx.globalCompositeOperation = "source-over";
+      glowCtx.drawImage(product, 0, 0);
+      glowCtx.globalCompositeOperation = "source-in";
+      glowCtx.fillStyle = color;
+      glowCtx.fillRect(0, 0, width, height);
+      ctx.save();
+      ctx.filter = `blur(${Math.round(14 + 10 * strength)}px)`;
+      ctx.drawImage(glow, x + offset * (6 + 8 * strength), y - 4, width, height);
+      ctx.restore();
+    }
+  }
+
+  function lightProduct(product, strength) {
+    const lit = document.createElement("canvas");
+    lit.width = product.width;
+    lit.height = product.height;
+    const litCtx = context(lit);
+    litCtx.drawImage(product, 0, 0);
+    litCtx.globalCompositeOperation = "screen";
+    const sides = litCtx.createLinearGradient(0, 0, lit.width, 0);
+    sides.addColorStop(0, `rgba(255, 50, 60, ${0.38 * strength})`);
+    sides.addColorStop(0.22, "rgba(0, 0, 0, 0)");
+    sides.addColorStop(0.78, "rgba(0, 0, 0, 0)");
+    sides.addColorStop(1, `rgba(60, 140, 255, ${0.34 * strength})`);
+    litCtx.fillStyle = sides;
+    litCtx.fillRect(0, 0, lit.width, lit.height);
+    // Keep the light on the product only.
+    litCtx.globalCompositeOperation = "destination-in";
+    litCtx.drawImage(product, 0, 0);
+    return lit;
   }
 
   function vignette(ctx) {
@@ -267,11 +375,11 @@
     // Enlarging a small photo more than this only adds blur, so small
     // products are shown a little smaller instead.
     const maxEnlarge = 2;
-    const scale = Math.min((size * 0.74) / image.width, (size * 0.56) / image.height, maxEnlarge);
+    const scale = Math.min((size * 0.72) / image.width, (size * 0.5) / image.height, maxEnlarge);
     const width = image.width * scale;
     const height = image.height * scale;
     const x = (size - width) / 2;
-    const baseline = size * 0.74;
+    const baseline = size * 0.7;
     const y = baseline - height;
     const scaled = document.createElement("canvas");
     scaled.width = Math.max(1, Math.round(width));
@@ -281,28 +389,21 @@
     scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
     sharpen(scaled, scale < 1 ? 0.35 : 0.55);
 
+    // Darker products get more coloured edge light.
+    const strength = Math.min(1, Math.max(0.35, (150 - brightness(scaled)) / 90));
+    // Same wide base for every product, like the showcase photos.
+    drawPedestal(ctx, size / 2, baseline + size * 0.012, Math.max(width * 1.12, size * 0.86));
+
     ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.filter = "blur(14px)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.filter = "blur(10px)";
     ctx.beginPath();
-    ctx.ellipse(size / 2, baseline + 4, width * 0.46, Math.max(10, height * 0.05), 0, 0, Math.PI * 2);
+    ctx.ellipse(size / 2, baseline - 2, width * 0.44, Math.max(6, size * 0.012), 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // Reflection on the glossy floor.
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.translate(0, baseline * 2);
-    ctx.scale(1, -1);
-    ctx.drawImage(scaled, x, y, width, height);
-    ctx.restore();
-    const fade = ctx.createLinearGradient(0, baseline, 0, baseline + height * 0.6);
-    fade.addColorStop(0, "rgba(4, 6, 9, 0.2)");
-    fade.addColorStop(1, "rgba(4, 6, 9, 1)");
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, baseline, size, size - baseline);
-
-    ctx.drawImage(scaled, x, y, width, height);
+    rimLight(ctx, scaled, x, y, strength);
+    ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
     vignette(ctx);
     return { x, y, scale, minX: product.minX, minY: product.minY };
   }
@@ -317,8 +418,8 @@
     ctx.drawImage(img, (size - width) / 2, (size - height) / 2, width, height);
     ctx.filter = "none";
     ctx.save();
-    ctx.globalCompositeOperation = "soft-light";
-    drawStage(ctx, { floor: false });
+    ctx.globalCompositeOperation = "screen";
+    drawLights(ctx, 0.8);
     ctx.restore();
     vignette(ctx);
   }
