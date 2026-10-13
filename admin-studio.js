@@ -369,7 +369,9 @@
 
   // Draws the cut-out product on the stage and returns where it was placed,
   // so clicks on the preview can be mapped back to the photo.
-  function composeCutOut(ctx, product) {
+  // accent: false draws the standard look; true adds the red and blue edge
+  // light, stronger for darker products.
+  function composeCutOut(ctx, product, { accent = false } = {}) {
     drawStage(ctx);
     const image = product.canvas;
     // Enlarging a small photo more than this only adds blur, so small
@@ -389,8 +391,9 @@
     scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
     sharpen(scaled, scale < 1 ? 0.35 : 0.55);
 
+    const darkness = (150 - brightness(scaled)) / 90;
     // Darker products get more coloured edge light.
-    const strength = Math.min(1, Math.max(0.35, (150 - brightness(scaled)) / 90));
+    const strength = Math.min(1, Math.max(0.35, darkness));
     // Same wide base for every product, like the showcase photos.
     drawPedestal(ctx, size / 2, baseline + size * 0.012, Math.max(width * 1.12, size * 0.86));
 
@@ -402,10 +405,14 @@
     ctx.fill();
     ctx.restore();
 
-    rimLight(ctx, scaled, x, y, strength);
-    ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
+    if (accent) {
+      rimLight(ctx, scaled, x, y, strength);
+      ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
+    } else {
+      ctx.drawImage(scaled, x, y, width, height);
+    }
     vignette(ctx);
-    return { x, y, scale, minX: product.minX, minY: product.minY };
+    return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
   }
 
   function composeFullPhoto(ctx, img) {
@@ -441,6 +448,8 @@
   // Returns { dataUrl, mode, canEdit, removeAt(u, v), reset() }. removeAt takes a
   // point on the finished photo (0 to 1 across and down) and removes the
   // leftover background around it; dataUrl always holds the latest result.
+  // Cut-out photos also get variants { standard, accent } and a choice, which
+  // starts on accent for dark products; dataUrl follows the choice.
   async function createStudioPhoto(file, { studio = true } = {}) {
     const img = await loadImage(file);
     const canvas = newCanvas();
@@ -470,17 +479,30 @@
 
     const state = initial;
     const firstMask = state.background.slice();
-    let placement = composeCutOut(ctx, product);
+    let placement;
     photo.mode = "studio";
     photo.canEdit = true;
-    photo.dataUrl = canvas.toDataURL("image/jpeg", quality);
+    photo.variants = {};
+    delete photo.dataUrl;
+    Object.defineProperty(photo, "dataUrl", {
+      get: () => photo.variants[photo.choice],
+      enumerable: true
+    });
+
+    const renderVariants = (current) => {
+      for (const variant of ["standard", "accent"]) {
+        const fresh = newCanvas();
+        placement = composeCutOut(context(fresh), current, { accent: variant === "accent" });
+        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
+      }
+    };
+    renderVariants(product);
+    photo.choice = placement.dark ? "accent" : "standard";
 
     const render = () => {
       const current = productCanvas(state);
       if (!current) return false;
-      const fresh = newCanvas();
-      placement = composeCutOut(context(fresh), current);
-      photo.dataUrl = fresh.toDataURL("image/jpeg", quality);
+      renderVariants(current);
       return true;
     };
 

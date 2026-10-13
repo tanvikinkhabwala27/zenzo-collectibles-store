@@ -5028,3 +5028,45 @@ button.admin-stat:hover {
   width: 150px;
   height: auto;
 }
+
+.studio-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 150px));
+  gap: 10px;
+}
+
+.studio-choices[hidden] {
+  display: none;
+}
+
+.studio-choice {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-choice img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.studio-choice small {
+  font-weight: 400;
+  font-size: 0.74rem;
+}
+
+.studio-choice.is-selected {
+  border-color: #2fbf71;
+  color: #ffffff;
+}

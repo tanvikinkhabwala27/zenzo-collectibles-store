@@ -245,7 +245,7 @@ function showLogin() {
 
 const preparedPhotos = new WeakMap();
 const studioNotes = {
-  studio: "Background removed and placed on the Zenzo stage. If any old background is left (for example inside a loop), tap it in the preview to remove it.",
+  studio: "Background removed and placed on the Zenzo stage. Pick Standard or Red accent under the large preview. If any old background is left (for example inside a loop), tap it in the large preview to remove it.",
   "studio-photo": "The background was too busy to remove, so the whole photo got the Zenzo lighting. A photo on a plain background gives the best result.",
   original: "Original photo, cropped square."
 };
@@ -255,6 +255,29 @@ function showPreview(form, photo) {
   if (!preview) return;
   preview.hidden = false;
   preview.querySelector("img").src = photo.dataUrl;
+  let choices = preview.querySelector(".studio-choices");
+  if (photo.variants && !choices) {
+    choices = document.createElement("div");
+    choices.className = "studio-choices";
+    choices.setAttribute("role", "group");
+    choices.setAttribute("aria-label", "Choose the photo style");
+    preview.querySelector("img").after(choices);
+  }
+  if (choices) {
+    choices.hidden = !photo.variants;
+    if (photo.variants) {
+      choices.innerHTML = [
+        ["standard", "Standard"],
+        ["accent", "Red accent", "Best for dark or black products"]
+      ].map(([value, label, hint]) => `
+        <button class="studio-choice${photo.choice === value ? " is-selected" : ""}" type="button" data-studio-choice="${value}" aria-pressed="${photo.choice === value}">
+          <img src="${photo.variants[value]}" alt="">
+          <span>${label}${photo.choice === value ? " (selected)" : ""}</span>
+          ${hint ? `<small>${hint}</small>` : ""}
+        </button>
+      `).join("");
+    }
+  }
   preview.querySelector("img").classList.toggle("is-editable", Boolean(photo.canEdit));
   const longest = Math.max(photo.sourceWidth || 0, photo.sourceHeight || 0);
   const lowResolution = longest && longest < 1000
@@ -319,12 +342,18 @@ document.addEventListener("click", async (event) => {
   if (!job) return;
   const photo = await job;
   if (!photo.canEdit) return;
+  const choice = event.target.closest("[data-studio-choice]");
+  if (choice) {
+    photo.choice = choice.dataset.studioChoice;
+    showPreview(form, photo);
+    return;
+  }
   if (event.target.closest(".studio-reset")) {
     photo.reset();
     showPreview(form, photo);
     return;
   }
-  const img = event.target.closest(".studio-preview img");
+  const img = event.target.closest(".studio-preview > img");
   if (!img) return;
   const box = img.getBoundingClientRect();
   const removed = photo.removeAt((event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
