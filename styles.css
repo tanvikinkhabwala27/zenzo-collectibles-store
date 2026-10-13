@@ -5256,3 +5256,21 @@ button.admin-stat:hover {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* Photo previews inside a product's Edit form must not take the small
+   product-thumbnail size used in the product list. */
+.admin-product .studio-preview > img {
+  width: min(320px, 100%);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.admin-product .studio-choice img,
+.bulk-studio .studio-choice img,
+.bulk-studio__photos figure img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
