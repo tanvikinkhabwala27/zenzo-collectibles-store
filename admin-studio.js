@@ -602,9 +602,30 @@
       }
     }
     keepMainProduct(state);
+    if (looksLikeLeftoverLight(state)) return null;
     const product = productCanvas(state);
     if (!product || product.canvas.width < size * 0.03 || product.canvas.height < size * 0.03) return null;
     return product;
+  }
+
+  // When much of what is left is dark, strongly red or blue light from the
+  // stage rather than the product, the separation went wrong; the photo is
+  // then kept as it is instead of saving a broken edit.
+  function looksLikeLeftoverLight(state) {
+    const { data, background } = state;
+    let kept = 0;
+    let light = 0;
+    for (let p = 0; p < background.length; p += 2) {
+      if (background[p]) continue;
+      const i = p * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      kept += 1;
+      const dark = r * 0.299 + g * 0.587 + b * 0.114 < 110;
+      if (dark && ((b > r + 35 && b > g + 15) || (r > g + 45 && r > b + 35))) light += 1;
+    }
+    return !kept || light / kept > 0.2;
   }
 
   // Drops stray specks and leftover patches that are not part of the
