@@ -260,8 +260,42 @@
     let removed = flood(state, border, backdrop, 60);
     removed += removeEnclosedBackdrop(state, backdrop);
     if (removed < width * height * 0.08 || removed > width * height * 0.95) return null;
+    removeShadows(state, backdrop);
     cleanEdges(state, backdrop);
+    keepMainProduct(state);
     return state;
+  }
+
+  // Shadows on a coloured backdrop (paper, a wall) are a darker shade of the
+  // same colour; grow the background into them from the parts already
+  // removed. Neutral grey or white backdrops are skipped, since shadows
+  // there look like grey or black product parts.
+  function removeShadows(state, [r, g, b]) {
+    const { data, background, width } = state;
+    const total = background.length;
+    const sum = r + g + b;
+    if (sum < 90) return;
+    const tone = [r / sum, g / sum, b / sum];
+    if (Math.max(...tone.map((t) => Math.abs(t - 1 / 3))) < 0.02) return;
+    const isShadow = (p) => {
+      const i = p * 4;
+      const pixelSum = data[i] + data[i + 1] + data[i + 2];
+      const level = pixelSum / sum;
+      if (level < 0.35 || level > 1.05 || pixelSum < 30) return false;
+      return Math.abs(data[i] / pixelSum - tone[0]) < 0.018
+        && Math.abs(data[i + 1] / pixelSum - tone[1]) < 0.018
+        && Math.abs(data[i + 2] / pixelSum - tone[2]) < 0.018;
+    };
+    const queue = [];
+    for (let p = 0; p < total; p += 1) if (background[p]) queue.push(p);
+    for (let k = 0; k < queue.length; k += 1) {
+      for (const n of neighbours(queue[k], width, total)) {
+        if (!background[n] && isShadow(n)) {
+          background[n] = 1;
+          queue.push(n);
+        }
+      }
+    }
   }
 
   // Backdrop showing through enclosed gaps (inside a loop track, between
