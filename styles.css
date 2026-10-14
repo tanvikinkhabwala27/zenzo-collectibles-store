@@ -5274,3 +5274,229 @@ button.admin-stat:hover {
   aspect-ratio: 1;
   object-fit: cover;
 }
+
+/* Manual photo adjustments after Zenzo's studio treatment. */
+.admin-product__quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-product__quick-actions .account-link,
+.studio-adjust {
+  min-height: 38px;
+  border: 1px solid rgba(53, 168, 255, 0.42);
+  border-radius: 6px;
+  padding: 7px 11px;
+  color: var(--ink);
+  background: rgba(53, 168, 255, 0.1);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.studio-adjust {
+  margin-top: 2px;
+}
+
+.photo-adjuster {
+  width: min(850px, calc(100% - 28px));
+  max-height: calc(100dvh - 28px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: var(--ink);
+  background: #09121e;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72);
+}
+
+.photo-adjuster::backdrop {
+  background: rgba(1, 5, 10, 0.82);
+  backdrop-filter: blur(7px);
+}
+
+.photo-adjuster__panel {
+  display: grid;
+}
+
+.photo-adjuster__header,
+.photo-adjuster__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.photo-adjuster__header {
+  border-bottom: 1px solid var(--line);
+}
+
+.photo-adjuster__header h2,
+.photo-adjuster__header p,
+.photo-adjuster__footer p {
+  margin: 0;
+}
+
+.photo-adjuster__close {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.photo-adjuster__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 18px;
+  padding: 18px;
+}
+
+.photo-adjuster__preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-self: start;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #05090f;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.photo-adjuster__preview:active {
+  cursor: grabbing;
+}
+
+.photo-adjuster__preview canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.photo-adjuster__preview > span {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(0, 0, 0, 0.62);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.photo-adjuster__controls {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.photo-adjuster__control {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.photo-adjuster__control > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.photo-adjuster__control output {
+  color: var(--ink);
+}
+
+.photo-adjuster__control input {
+  width: 100%;
+  accent-color: var(--red);
+}
+
+.photo-adjuster__tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.photo-adjuster__tools button,
+.photo-adjuster__controls > button,
+.photo-adjuster__footer button {
+  min-height: 40px;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.photo-adjuster .account-link {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.photo-adjuster .account-link:hover,
+.photo-adjuster .account-link:focus-visible {
+  border-color: rgba(53, 168, 255, 0.72);
+  background: rgba(53, 168, 255, 0.13);
+}
+
+.photo-adjuster__footer {
+  border-top: 1px solid var(--line);
+}
+
+.photo-adjuster__footer > p {
+  min-height: 22px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.photo-adjuster__footer > div {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .photo-adjuster__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-adjuster__preview {
+    width: min(100%, 430px);
+    justify-self: center;
+  }
+
+  .photo-adjuster__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photo-adjuster__footer > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-product__quick-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .photo-adjuster__header,
+  .photo-adjuster__footer,
+  .photo-adjuster__layout {
+    padding: 12px;
+  }
+}
