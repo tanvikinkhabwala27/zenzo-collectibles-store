@@ -315,7 +315,8 @@ async function preparePhoto(form) {
   }
   const job = window.zenzoStudio.createStudioPhoto(file, {
     studio: form.elements.studio?.checked !== false,
-    stand: usesStand(form.elements.collection?.value)
+    stand: usesStand(form.elements.collection?.value),
+    preserveHardware: form.elements.collection?.value === "Accessories"
   });
   preparedPhotos.set(form, job);
   if (preview) {
@@ -416,7 +417,11 @@ async function runBulkStudio() {
       let url = currentPhotoUrl(product);
       if (!url) continue;
       try {
-        const options = { studio: true, stand: usesStand(product.collection) };
+        const options = {
+          studio: true,
+          stand: usesStand(product.collection),
+          preserveHardware: product.collection === "Accessories"
+        };
         let photo = await window.zenzoStudio.createStudioPhoto(await fileFromUrl(url), options);
         // A stand that should not be there: start again from the real photo
         // when the repo still has it.

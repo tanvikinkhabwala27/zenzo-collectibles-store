@@ -272,7 +272,7 @@
 
   // Prepares a working copy of the photo and removes a plain background by
   // flooding in from the edges. Returns null when the edges are too busy.
-  function prepareCutOut(img) {
+  function prepareCutOut(img, { preserveHardware = false } = {}) {
     const scale = Math.min(1, workingSize / Math.max(img.width, img.height));
     const width = Math.max(1, Math.round(img.width * scale));
     const height = Math.max(1, Math.round(img.height * scale));
@@ -294,6 +294,7 @@
 
     let removed = flood(state, border, backdrop, 60);
     removed += removeEnclosedBackdrop(state, backdrop);
+    if (preserveHardware) removed += removeMetalLoopInteriors(state, backdrop);
     if (removed < width * height * 0.08 || removed > width * height * 0.95) return null;
     removeShadows(state, backdrop);
     cleanEdges(state, backdrop);
@@ -370,13 +371,74 @@
     return removed;
   }
 
+  // Keyrings often surround a patch of the original pale backdrop. The
+  // regular enclosed-area pass intentionally avoids textured areas, so use
+  // the neutral metal outline to distinguish a ring opening from white or
+  // light-coloured product details such as flower petals.
+  function removeMetalLoopInteriors(state, [r, g, b]) {
+    const { data, background, width } = state;
+    const total = background.length;
+    const seen = new Uint8Array(total);
+    state.protected ||= new Uint8Array(total);
+    const minPatch = total * 0.00015;
+    const maxPatch = total * 0.04;
+    let removed = 0;
+
+    const backdropLike = (p) => distance(data, p * 4, r, g, b) < 72;
+    const metalLike = (p) => {
+      const i = p * 4;
+      const high = Math.max(data[i], data[i + 1], data[i + 2]);
+      const low = Math.min(data[i], data[i + 1], data[i + 2]);
+      const light = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      return high - low < 38 && light > 28 && light < 248;
+    };
+
+    for (let start = 0; start < total; start += 1) {
+      if (background[start] || seen[start] || !backdropLike(start)) continue;
+      const patch = [start];
+      const boundary = [];
+      const boundarySeen = new Uint8Array(total);
+      seen[start] = 1;
+      for (let k = 0; k < patch.length; k += 1) {
+        const p = patch[k];
+        for (const n of neighbours(p, width, total)) {
+          if (background[n]) continue;
+          if (backdropLike(n)) {
+            if (!seen[n]) {
+              seen[n] = 1;
+              patch.push(n);
+            }
+          } else if (!boundarySeen[n]) {
+            boundarySeen[n] = 1;
+            boundary.push(n);
+          }
+        }
+      }
+
+      const metal = boundary.filter(metalLike);
+      const compactness = 4 * Math.PI * patch.length / (boundary.length * boundary.length);
+      if (patch.length < minPatch || patch.length > maxPatch || boundary.length < 20) continue;
+      if (metal.length / boundary.length < 0.58 || compactness < 0.55) continue;
+
+      for (const p of patch) background[p] = 1;
+      for (const p of metal) {
+        state.protected[p] = 1;
+        for (const n of neighbours(p, width, total)) {
+          if (metalLike(n)) state.protected[n] = 1;
+        }
+      }
+      removed += patch.length;
+    }
+    return removed;
+  }
+
   // Removes the light halo of old backdrop that clings to cut edges.
   function cleanEdges(state, [r, g, b]) {
     const { data, background, width, height } = state;
     for (let pass = 0; pass < 2; pass += 1) {
       const strip = [];
       for (let p = 0; p < background.length; p += 1) {
-        if (background[p]) continue;
+        if (background[p] || state.protected?.[p]) continue;
         const x = p % width;
         const y = Math.floor(p / width);
         const edge = (x > 0 && background[p - 1]) || (x < width - 1 && background[p + 1])
@@ -793,7 +855,7 @@
   // leftover background around it; dataUrl always holds the latest result.
   // Cut-out photos also get variants { standard, accent } and a choice, which
   // starts on accent for dark products; dataUrl follows the choice.
-  async function createStudioPhoto(file, { studio = true, stand = true } = {}) {
+  async function createStudioPhoto(file, { studio = true, stand = true, preserveHardware = false } = {}) {
     const img = await loadImage(file);
     if (!stand) await loadBackdrop();
     const canvas = newCanvas();
@@ -850,7 +912,7 @@
       return photo;
     }
 
-    const initial = prepareCutOut(img);
+    const initial = prepareCutOut(img, { preserveHardware });
     const product = initial && productCanvas(initial);
     if (!product) {
       photo.mode = "studio-photo";
