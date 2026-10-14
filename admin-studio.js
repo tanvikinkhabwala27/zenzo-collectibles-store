@@ -421,7 +421,7 @@
   //    product (the pads of a paw) stay.
   //  - Backdrop along the outside of the outline is removed where the model
   //    is unsure, and close to the outline even where it is sure.
-  function clearBackdropInOutline(state, backdrop) {
+  function clearBackdropInOutline(state, backdrop, confidence) {
     const { data, background, width } = state;
     const total = background.length;
     const height = total / width;
@@ -462,14 +462,15 @@
     for (let p = 0; p < total; p += 1) if (!background[p] && looksLikeBackdrop(p)) candidate[p] = 1;
 
     // Backdrop along the outside of the outline.
-    const reach = Math.round(Math.max(width, height) * 0.011);
     let edge = [];
     for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
     for (let step = 1; edge.length; step += 1) {
       const next = [];
       for (const p of edge) {
         for (const n of neighbours(p, width, total)) {
-          if (background[n] || !candidate[n] || (step > reach && data[n * 4 + 3] > 235)) continue;
+          // Only where the model itself is unsure: a white product on white
+          // cloth looks like the backdrop but the model knows it is product.
+          if (background[n] || !candidate[n] || confidence[n] > 0.5) continue;
           background[n] = 1;
           next.push(n);
         }
@@ -484,15 +485,19 @@
       if (!candidate[start] || seen[start] || background[start]) continue;
       const patch = [start];
       seen[start] = 1;
+      // Truly enclosed only: a patch that reaches the background is part of
+      // the product's own outline (white strands), not a hole.
+      let open = false;
       for (let k = 0; k < patch.length; k += 1) {
         for (const n of neighbours(patch[k], width, total)) {
+          if (background[n]) open = true;
           if (candidate[n] && !seen[n] && !background[n]) {
             seen[n] = 1;
             patch.push(n);
           }
         }
       }
-      if (patch.length >= minPatch && thinlyEnclosed(state, patch)) {
+      if (!open && patch.length >= minPatch && thinlyEnclosed(state, patch)) {
         for (const p of patch) background[p] = 1;
       }
     }
@@ -546,7 +551,7 @@
     const backdrop = [median(0), median(1), median(2)];
     const plain = border.filter((p) => distance(data, p * 4, ...backdrop) < 60).length / border.length;
     if (plain > 0.6) {
-      clearBackdropInOutline(state, backdrop);
+      clearBackdropInOutline(state, backdrop, rough);
       for (let p = 0; p < total; p += 1) {
         const i = p * 4;
         const alpha = data[i + 3] / 255;
