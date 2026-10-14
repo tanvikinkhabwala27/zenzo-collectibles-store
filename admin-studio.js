@@ -64,29 +64,41 @@
     }
   }
 
-  function drawStage(ctx, { floor = true } = {}) {
+  // legacy: the stage as earlier versions drew it (a table with a hard top
+  // edge), only used to recognise photos made then.
+  function drawStage(ctx, { floor = true, legacy = false } = {}) {
     ctx.fillStyle = "#05070b";
     ctx.fillRect(0, 0, size, size);
     drawLights(ctx);
     if (!floor) return;
-    // Glossy table the display base stands on, catching the coloured lights.
-    const tableTop = size * 0.8;
-    const table = ctx.createLinearGradient(0, tableTop, 0, size);
-    table.addColorStop(0, "#090b10");
-    table.addColorStop(1, "#020304");
-    ctx.fillStyle = table;
-    ctx.fillRect(0, tableTop, size, size - tableTop);
-    for (const [x, color] of [[0, "255, 40, 50"], [size, "50, 130, 255"]]) {
-      const pool = ctx.createRadialGradient(x, tableTop + size * 0.08, 0, x, tableTop + size * 0.08, size * 0.3);
-      pool.addColorStop(0, `rgba(${color}, 0.22)`);
-      pool.addColorStop(1, `rgba(${color}, 0)`);
-      ctx.fillStyle = pool;
+    if (legacy) {
+      const tableTop = size * 0.8;
+      const table = ctx.createLinearGradient(0, tableTop, 0, size);
+      table.addColorStop(0, "#090b10");
+      table.addColorStop(1, "#020304");
+      ctx.fillStyle = table;
       ctx.fillRect(0, tableTop, size, size - tableTop);
+      for (const [x, color] of [[0, "255, 40, 50"], [size, "50, 130, 255"]]) {
+        const pool = ctx.createRadialGradient(x, tableTop + size * 0.08, 0, x, tableTop + size * 0.08, size * 0.3);
+        pool.addColorStop(0, `rgba(${color}, 0.22)`);
+        pool.addColorStop(1, `rgba(${color}, 0)`);
+        ctx.fillStyle = pool;
+        ctx.fillRect(0, tableTop, size, size - tableTop);
+      }
+      return;
     }
+    // The floor fades in softly, with no edge line and no reflection, so the
+    // photo stays clean.
+    const top = size * 0.62;
+    const shade = ctx.createLinearGradient(0, top, 0, size);
+    shade.addColorStop(0, "rgba(2, 3, 4, 0)");
+    shade.addColorStop(1, "rgba(2, 3, 4, 0.55)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, top, size, size - top);
   }
 
   // The black display base every product sits on, as in the showcase photos.
-  function drawPedestal(ctx, centerX, topY, width) {
+  function drawPedestal(ctx, centerX, topY, width, { legacy = false } = {}) {
     const depth = size * 0.05;
     const front = size * 0.8 - topY;
     const left = centerX - width / 2;
@@ -118,7 +130,11 @@
     edge.addColorStop(1, "rgba(70, 150, 255, 0.55)");
     ctx.fillStyle = edge;
     ctx.fillRect(left, topY - 1, width, 2);
-    // Soft reflection of the base on the table.
+    if (!legacy) {
+      ctx.restore();
+      return;
+    }
+    // Earlier versions drew a soft reflection of the base on the table.
     ctx.globalAlpha = 0.35;
     const mirror = ctx.createLinearGradient(0, topY + front, 0, topY + front * 1.8);
     mirror.addColorStop(0, "rgba(18, 21, 27, 0.9)");
@@ -963,8 +979,8 @@
 
     const plain = newCanvas();
     const plainCtx = context(plain, { willReadFrequently: true });
-    drawStage(plainCtx);
-    drawPedestal(plainCtx, size / 2, size * 0.712, size * 0.86);
+    drawStage(plainCtx, { legacy: true });
+    drawPedestal(plainCtx, size / 2, size * 0.712, size * 0.86, { legacy: true });
     vignette(plainCtx);
     const lit = newCanvas();
     const litCtx = context(lit, { willReadFrequently: true });
