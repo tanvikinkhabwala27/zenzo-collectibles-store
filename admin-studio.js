@@ -819,13 +819,19 @@
   // the middle with a soft shadow and no stand.
   // The product photo on the background, and nothing else: no stand,
   // shadow, glow or colour change, so it looks exactly as it is.
-  function composeFloating(ctx, product, { zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
+  function composeFloating(ctx, product, { zoom = 1, offsetX = 0, offsetY = 0, background = 0 } = {}) {
     if (accessoryBackdrop) {
       ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
     } else {
       ctx.fillStyle = "#0a0b0f";
       ctx.fillRect(0, 0, size, size);
       drawLights(ctx, 0.38, 0.62);
+    }
+    if (background > 0) {
+      // Lighter background for dark products, keeping a hint of the side
+      // lights.
+      ctx.fillStyle = `rgba(150, 153, 160, ${background})`;
+      ctx.fillRect(0, 0, size, size);
     }
     const image = product.canvas;
     // Same size and position as the product in the accessory photos.
@@ -848,8 +854,8 @@
   // accent: false draws the standard look; true adds the red and blue edge
   // light, stronger for darker products. stand: false uses the accessory
   // look without the display base.
-  function composeCutOut(ctx, product, { accent = false, stand = false, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
-    if (!stand) return composeFloating(ctx, product, { zoom, offsetX, offsetY });
+  function composeCutOut(ctx, product, { accent = false, stand = false, zoom = 1, offsetX = 0, offsetY = 0, background = 0 } = {}) {
+    if (!stand) return composeFloating(ctx, product, { zoom, offsetX, offsetY, background });
     drawStage(ctx);
     const image = product.canvas;
     // Enlarging a small photo more than this only adds blur, so small
@@ -1385,7 +1391,26 @@
     return canvas;
   }
 
-  const noAdjustments = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, brightness: 1, contrast: 1 };
+  const noAdjustments = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, brightness: 1, contrast: 1, background: 0 };
+
+  // How much to lighten the background behind a product (0 to 0.7): dark
+  // and black products would blend into the dark studio background, so the
+  // background is lifted towards a soft grey; the product itself is left
+  // exactly as it is.
+  function backgroundFor(product) {
+    const { canvas } = product;
+    const { data } = context(canvas, { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+    let solid = 0;
+    let dark = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      if (data[i + 3] < 200) continue;
+      solid += 1;
+      if (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114 < 70) dark += 1;
+    }
+    if (!solid) return 0;
+    const share = dark / solid;
+    return Math.round(Math.min(0.6, Math.max(0, (share - 0.2) * 1.2)) * 100) / 100;
+  }
 
   // The admin's manual adjustments act on the cut-out product only: turning
   // it and changing its brightness and contrast here, its size and position
@@ -1421,12 +1446,14 @@
         accent: variant === "accent",
         zoom: adjust.zoom,
         offsetX: adjust.offsetX,
-        offsetY: adjust.offsetY
+        offsetY: adjust.offsetY,
+        background: adjust.background
       });
       return { adjusted, placement };
     };
     photo.adjustable = true;
-    photo.adjustments = { ...noAdjustments };
+    photo.autoBackground = backgroundFor(getProduct());
+    photo.adjustments = { ...noAdjustments, background: photo.autoBackground };
     photo.renderVariants = () => {
       for (const variant of ["standard"]) {
         const fresh = newCanvas();
@@ -1436,10 +1463,10 @@
       return last.placement;
     };
     photo.drawPreview = (ctx, adjust) => {
-      draw(ctx, photo.choice, { ...noAdjustments, ...adjust });
+      draw(ctx, photo.choice, { ...photo.adjustments, ...adjust });
     };
     photo.setAdjustments = (adjust) => {
-      photo.adjustments = { ...noAdjustments, ...adjust };
+      photo.adjustments = { ...photo.adjustments, ...adjust };
       photo.renderVariants();
     };
     photo.toProduct = (u, v) => {

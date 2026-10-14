@@ -7,7 +7,9 @@
   const controls = {
     zoom: dialog?.querySelector('[name="zoom"]'),
     brightness: dialog?.querySelector('[name="brightness"]'),
-    contrast: dialog?.querySelector('[name="contrast"]')
+    contrast: dialog?.querySelector('[name="contrast"]'),
+    // How much the studio background is lightened behind the product.
+    background: dialog?.querySelector('[name="background"]')
   };
   const outputs = Object.fromEntries(Object.keys(controls).map((name) => [
     name,
@@ -21,6 +23,7 @@
     zoom: 1,
     brightness: 1,
     contrast: 1,
+    background: 0,
     rotation: 0,
     offsetX: 0,
     offsetY: 0
@@ -55,6 +58,7 @@
     state.zoom = adjustments.zoom;
     state.brightness = adjustments.brightness;
     state.contrast = adjustments.contrast;
+    state.background = adjustments.background;
     state.rotation = adjustments.rotation;
     state.offsetX = adjustments.offsetX * canvas.width;
     state.offsetY = adjustments.offsetY * canvas.height;
@@ -66,6 +70,7 @@
     state.zoom = 1;
     state.brightness = 1;
     state.contrast = 1;
+    state.background = live ? live.autoBackground : 0;
     state.rotation = 0;
     state.offsetX = 0;
     state.offsetY = 0;
@@ -79,6 +84,7 @@
       zoom: state.zoom,
       brightness: state.brightness,
       contrast: state.contrast,
+      background: state.background,
       offsetX: state.offsetX / canvas.width,
       offsetY: state.offsetY / canvas.height
     };
@@ -150,6 +156,8 @@
     canvas.height = live ? studioSize : 1000;
     // Zooming a whole photo out would show an empty border around it.
     controls.zoom.min = live ? "40" : "100";
+    // Only a studio photo has a separate background to lighten.
+    controls.background.closest("[data-photo-background-control]").hidden = !live;
     dialog.showModal();
     const result = new Promise((resolve) => {
       finish = resolve;
