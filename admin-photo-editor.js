@@ -27,6 +27,11 @@
   };
   let drag = null;
   let finish = null;
+  // A studio photo with a cut-out product: the controls move, turn, resize
+  // and light the product only, and the studio background stays the same.
+  // Without one (an original or full photo), the whole photo is adjusted.
+  let live = null;
+  let frame = 0;
 
   function loadImage(source) {
     return new Promise((resolve, reject) => {
@@ -46,6 +51,17 @@
     }
   }
 
+  function restore(adjustments) {
+    state.zoom = adjustments.zoom;
+    state.brightness = adjustments.brightness;
+    state.contrast = adjustments.contrast;
+    state.rotation = adjustments.rotation;
+    state.offsetX = adjustments.offsetX * canvas.width;
+    state.offsetY = adjustments.offsetY * canvas.height;
+    syncControls();
+    draw();
+  }
+
   function reset() {
     state.zoom = 1;
     state.brightness = 1;
@@ -57,7 +73,23 @@
     draw();
   }
 
+  function liveAdjustments() {
+    return {
+      rotation: state.rotation,
+      zoom: state.zoom,
+      brightness: state.brightness,
+      contrast: state.contrast,
+      offsetX: state.offsetX / canvas.width,
+      offsetY: state.offsetY / canvas.height
+    };
+  }
+
   function draw() {
+    if (live) {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => live.drawPreview(canvas.getContext("2d"), liveAdjustments()));
+      return;
+    }
     if (!state.image) return;
     const context = canvas.getContext("2d");
     const width = canvas.width;
@@ -67,6 +99,11 @@
     const rotatedWidth = quarterTurn ? image.naturalHeight : image.naturalWidth;
     const rotatedHeight = quarterTurn ? image.naturalWidth : image.naturalHeight;
     const cover = Math.max(width / rotatedWidth, height / rotatedHeight);
+    // Keep the photo covering the whole frame, so no empty edge shows.
+    const spareX = Math.max(0, (rotatedWidth * cover * state.zoom - width) / 2);
+    const spareY = Math.max(0, (rotatedHeight * cover * state.zoom - height) / 2);
+    state.offsetX = Math.min(spareX, Math.max(-spareX, state.offsetX));
+    state.offsetY = Math.min(spareY, Math.max(-spareY, state.offsetY));
 
     context.clearRect(0, 0, width, height);
     const background = context.createLinearGradient(0, 0, width, height);
@@ -99,14 +136,29 @@
     if (resolve) resolve(result);
   }
 
+  // source is a studio photo object with adjustable set (the product is
+  // adjusted on the studio background; resolves with "adjusted" when saved)
+  // or an image URL (the whole photo is adjusted; resolves with the edited
+  // photo as a data URL). Resolves with null when cancelled.
   async function open(source) {
     if (finish) close(null);
-    message.textContent = "Loading photo...";
-    saveButton.disabled = true;
+    live = source && source.adjustable ? source : null;
+    message.textContent = live ? "" : "Loading photo...";
+    saveButton.disabled = !live;
+    const studioSize = window.zenzoStudio?.size || 1200;
+    canvas.width = live ? studioSize : 1000;
+    canvas.height = live ? studioSize : 1000;
+    // Zooming a whole photo out would show an empty border around it.
+    controls.zoom.min = live ? "40" : "100";
     dialog.showModal();
     const result = new Promise((resolve) => {
       finish = resolve;
     });
+    if (live) {
+      state.image = null;
+      restore(live.adjustments);
+      return result;
+    }
     try {
       state.image = await loadImage(source);
       reset();
@@ -137,7 +189,14 @@
     }
     if (event.target.closest("[data-photo-reset]")) reset();
     if (event.target.closest("[data-photo-adjuster-close], [data-photo-adjuster-cancel]")) close(null);
-    if (event.target.closest("[data-photo-adjuster-save]")) close(canvas.toDataURL("image/jpeg", 0.9));
+    if (event.target.closest("[data-photo-adjuster-save]")) {
+      if (live) {
+        live.setAdjustments(liveAdjustments());
+        close("adjusted");
+      } else {
+        close(canvas.toDataURL("image/jpeg", 0.9));
+      }
+    }
   });
 
   dialog.addEventListener("cancel", (event) => {
@@ -146,7 +205,7 @@
   });
 
   stage.addEventListener("pointerdown", (event) => {
-    if (!state.image) return;
+    if (!state.image && !live) return;
     stage.setPointerCapture(event.pointerId);
     drag = {
       pointerId: event.pointerId,

@@ -796,7 +796,7 @@
   // Accessory look, as in the accessory photos: a near-black seamless
   // background with faint red and blue at the sides, the product floating in
   // the middle with a soft shadow and no stand.
-  function composeFloating(ctx, product, { accent = false } = {}) {
+  function composeFloating(ctx, product, { accent = false, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
     if (accessoryBackdrop) {
       ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
     } else {
@@ -806,11 +806,11 @@
     }
     const image = product.canvas;
     // Same size and position as the product in the accessory photos.
-    const scale = Math.min((size * 0.6) / image.width, (size * 0.66) / image.height, 2);
+    const scale = Math.min((size * 0.6) / image.width, (size * 0.66) / image.height, 2) * zoom;
     const width = image.width * scale;
     const height = image.height * scale;
-    const x = (size - width) / 2;
-    const y = Math.min(size * 0.47 - height / 2, size * 0.8 - height);
+    const x = (size - width) / 2 + offsetX * size;
+    const y = Math.min(size * 0.47 - height / 2, size * 0.8 - height) + offsetY * size;
     const scaled = document.createElement("canvas");
     scaled.width = Math.max(1, Math.round(width));
     scaled.height = Math.max(1, Math.round(height));
@@ -827,7 +827,7 @@
     ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
     ctx.filter = "blur(18px)";
     ctx.beginPath();
-    ctx.ellipse(size / 2, y + height + size * 0.015, width * 0.4, Math.max(8, size * 0.018), 0, 0, Math.PI * 2);
+    ctx.ellipse(x + width / 2, y + height + size * 0.015, width * 0.4, Math.max(8, size * 0.018), 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -844,17 +844,18 @@
   // accent: false draws the standard look; true adds the red and blue edge
   // light, stronger for darker products. stand: false uses the accessory
   // look without the display base.
-  function composeCutOut(ctx, product, { accent = false, stand = true } = {}) {
-    if (!stand) return composeFloating(ctx, product, { accent });
+  function composeCutOut(ctx, product, { accent = false, stand = true, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
+    if (!stand) return composeFloating(ctx, product, { accent, zoom, offsetX, offsetY });
     drawStage(ctx);
     const image = product.canvas;
     // Enlarging a small photo more than this only adds blur, so small
     // products are shown a little smaller instead.
     const maxEnlarge = 2;
-    const scale = Math.min((size * 0.72) / image.width, (size * 0.5) / image.height, maxEnlarge);
+    const scale = Math.min((size * 0.72) / image.width, (size * 0.5) / image.height, maxEnlarge) * zoom;
     const width = image.width * scale;
     const height = image.height * scale;
-    const x = (size - width) / 2;
+    // On the stand the product can move sideways but always stands on it.
+    const x = (size - width) / 2 + offsetX * size;
     const baseline = size * 0.7;
     const y = baseline - height;
     const scaled = document.createElement("canvas");
@@ -876,7 +877,7 @@
     ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     ctx.filter = "blur(10px)";
     ctx.beginPath();
-    ctx.ellipse(size / 2, baseline - 2, width * 0.44, Math.max(6, size * 0.012), 0, 0, Math.PI * 2);
+    ctx.ellipse(x + width / 2, baseline - 2, width * 0.44, Math.max(6, size * 0.012), 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -1380,6 +1381,74 @@
     return canvas;
   }
 
+  const noAdjustments = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, brightness: 1, contrast: 1 };
+
+  // The admin's manual adjustments act on the cut-out product only: turning
+  // it and changing its brightness and contrast here, its size and position
+  // when it is placed. The studio background is never changed, so every
+  // photo keeps the same background.
+  function adjustProduct(product, adjust) {
+    const turn = (((adjust.rotation || 0) % 360) + 360) % 360;
+    const source = product.canvas;
+    if (!turn && adjust.brightness === 1 && adjust.contrast === 1) {
+      return { ...product, turn: 0, sourceWidth: source.width, sourceHeight: source.height };
+    }
+    const sideways = turn === 90 || turn === 270;
+    const canvas = document.createElement("canvas");
+    canvas.width = sideways ? source.height : source.width;
+    canvas.height = sideways ? source.width : source.height;
+    const ctx = context(canvas);
+    ctx.filter = `brightness(${adjust.brightness}) contrast(${adjust.contrast})`;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((turn * Math.PI) / 180);
+    ctx.drawImage(source, -source.width / 2, -source.height / 2);
+    return { canvas, minX: product.minX, minY: product.minY, turn, sourceWidth: source.width, sourceHeight: source.height };
+  }
+
+  // Gives a cut-out photo its adjustments: photo.adjustments, setAdjustments
+  // (re-renders both variants), drawPreview (draws one variant with trial
+  // adjustments, for the adjust dialog) and toProduct (maps a point on the
+  // finished photo back to the cut-out, for tap-to-remove).
+  function makeAdjustable(photo, getProduct, compose) {
+    let last = null;
+    const draw = (ctx, variant, adjust) => {
+      const adjusted = adjustProduct(getProduct(), adjust);
+      const placement = compose(ctx, adjusted, {
+        accent: variant === "accent",
+        zoom: adjust.zoom,
+        offsetX: adjust.offsetX,
+        offsetY: adjust.offsetY
+      });
+      return { adjusted, placement };
+    };
+    photo.adjustable = true;
+    photo.adjustments = { ...noAdjustments };
+    photo.renderVariants = () => {
+      for (const variant of ["standard", "accent"]) {
+        const fresh = newCanvas();
+        last = draw(context(fresh), variant, photo.adjustments);
+        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
+      }
+      return last.placement;
+    };
+    photo.drawPreview = (ctx, adjust) => {
+      draw(ctx, photo.choice, { ...noAdjustments, ...adjust });
+    };
+    photo.setAdjustments = (adjust) => {
+      photo.adjustments = { ...noAdjustments, ...adjust };
+      photo.renderVariants();
+    };
+    photo.toProduct = (u, v) => {
+      const { adjusted, placement } = last;
+      const ax = (u * size - placement.x) / placement.scale - adjusted.canvas.width / 2;
+      const ay = (v * size - placement.y) / placement.scale - adjusted.canvas.height / 2;
+      const angle = (-adjusted.turn * Math.PI) / 180;
+      const sx = ax * Math.cos(angle) - ay * Math.sin(angle) + adjusted.sourceWidth / 2;
+      const sy = ax * Math.sin(angle) + ay * Math.cos(angle) + adjusted.sourceHeight / 2;
+      return { x: Math.floor(sx + adjusted.minX), y: Math.floor(sy + adjusted.minY) };
+    };
+  }
+
   // Returns { dataUrl, mode, canEdit, removeAt(u, v), reset() }. removeAt takes a
   // point on the finished photo (0 to 1 across and down) and removes the
   // leftover background around it; dataUrl always holds the latest result.
@@ -1412,13 +1481,9 @@
     if (standless) {
       photo.mode = "unstand";
       photo.variants = {};
-      let placement;
-      for (const variant of ["standard", "accent"]) {
-        const fresh = newCanvas();
-        placement = composeFloating(context(fresh), standless, { accent: variant === "accent" });
-        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
-      }
       photo.choice = "standard";
+      makeAdjustable(photo, () => standless, composeFloating);
+      photo.renderVariants();
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
         get: () => photo.variants[photo.choice],
@@ -1435,7 +1500,8 @@
         composeRestyle(context(fresh), img, { accent: variant === "accent" });
         photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
       }
-      photo.choice = "accent";
+      // These photos already have the studio look: start unchanged.
+      photo.choice = "standard";
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
         get: () => photo.variants[photo.choice],
@@ -1475,26 +1541,22 @@
       enumerable: true
     });
 
-    const renderVariants = (current) => {
-      for (const variant of ["standard", "accent"]) {
-        const fresh = newCanvas();
-        placement = composeCutOut(context(fresh), current, { accent: variant === "accent", stand });
-        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
-      }
-    };
-    renderVariants(product);
+    let current = product;
+    photo.choice = "standard";
+    makeAdjustable(photo, () => current, (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }));
+    placement = photo.renderVariants();
     photo.choice = placement.dark ? "accent" : "standard";
 
     const render = () => {
-      const current = productCanvas(state);
-      if (!current) return false;
-      renderVariants(current);
+      const next = productCanvas(state);
+      if (!next) return false;
+      current = next;
+      photo.renderVariants();
       return true;
     };
 
     photo.removeAt = (u, v) => {
-      const px = Math.floor((u * size - placement.x) / placement.scale + placement.minX);
-      const py = Math.floor((v * size - placement.y) / placement.scale + placement.minY);
+      const { x: px, y: py } = photo.toProduct(u, v);
       if (px < 0 || py < 0 || px >= state.width || py >= state.height) return false;
       const p = py * state.width + px;
       if (state.background[p]) return false;
@@ -1517,5 +1579,5 @@
     return photo;
   }
 
-  window.zenzoStudio = { createStudioPhoto };
+  window.zenzoStudio = { createStudioPhoto, size };
 })();

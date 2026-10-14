@@ -352,6 +352,19 @@ async function fileFromUrl(url) {
   return new File([blob], "current-photo.jpg", { type: blob.type || "image/jpeg" });
 }
 
+// Opens the adjust dialog. Studio photos with a cut-out product are adjusted
+// on the product only, so the background stays the same as every other
+// photo; other photos are adjusted as a whole.
+async function adjustPhoto(form, photo) {
+  const result = await window.zenzoPhotoEditor.open(photo.adjustable ? photo : photo.editedDataUrl || photo.dataUrl);
+  if (!result) return false;
+  if (result === "adjusted") delete photo.editedDataUrl;
+  else photo.editedDataUrl = result;
+  showPreview(form, photo);
+  form.querySelector(".studio-preview p").textContent = "Edited photo ready. Select Save changes to publish it.";
+  return true;
+}
+
 async function prepareExistingPhoto(form, url) {
   const file = await fileFromUrl(url);
   const files = new DataTransfer();
@@ -523,12 +536,7 @@ document.addEventListener("click", async (event) => {
   if (!job) return;
   const photo = await job;
   if (event.target.closest(".studio-adjust")) {
-    const edited = await window.zenzoPhotoEditor.open(photo.editedDataUrl || photo.dataUrl);
-    if (edited) {
-      photo.editedDataUrl = edited;
-      showPreview(form, photo);
-      preview.querySelector("p").textContent = "Edited photo ready. Select Save changes to publish it.";
-    }
+    await adjustPhoto(form, photo);
     return;
   }
   const choice = event.target.closest("[data-studio-choice]");
@@ -815,11 +823,7 @@ productsList.addEventListener("click", async (event) => {
     editPhotoButton.textContent = "Preparing...";
     try {
       const photo = await prepareExistingPhoto(form, sourcePhotoUrl(product));
-      const edited = await window.zenzoPhotoEditor.open(photo.dataUrl);
-      if (edited) {
-        photo.editedDataUrl = edited;
-        showPreview(form, photo);
-        form.querySelector(".studio-preview p").textContent = "Edited photo ready. Select Save changes to publish it.";
+      if (await adjustPhoto(form, photo)) {
         form.querySelector(".studio-preview").scrollIntoView({ behavior: "smooth", block: "center" });
       }
     } catch (error) {
