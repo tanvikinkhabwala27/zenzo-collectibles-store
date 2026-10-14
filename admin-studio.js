@@ -428,6 +428,99 @@
     return out;
   }
 
+  // Finds key rings: round metal loops with the backdrop showing inside and
+  // around them. Circles are found by letting each strong edge vote for
+  // centres along its gradient, then each candidate is checked: backdrop
+  // inside, backdrop around it, and a visible metal edge along the circle.
+  // Paw pads, buttons and printed circles fail those checks. Returns
+  // [{ x, y, r }] in working pixels.
+  function findKeyRings(state, backdrop) {
+    const { data, width } = state;
+    const total = width * (data.length / 4 / width);
+    const height = total / width;
+    const step = 2;
+    const w = Math.floor(width / step);
+    const h = Math.floor(height / step);
+    const gray = new Float32Array(w * h);
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const i = ((y * step) * width + x * step) * 4;
+        gray[y * w + x] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      }
+    }
+    const longest = Math.max(w, h);
+    const minR = Math.round(longest * 0.025);
+    const maxR = Math.round(longest * 0.09);
+    const votes = new Float32Array(w * h);
+    const edges = [];
+    for (let y = 1; y < h - 1; y += 1) {
+      for (let x = 1; x < w - 1; x += 1) {
+        const p = y * w + x;
+        const gx = gray[p - w + 1] + 2 * gray[p + 1] + gray[p + w + 1] - gray[p - w - 1] - 2 * gray[p - 1] - gray[p + w - 1];
+        const gy = gray[p + w - 1] + 2 * gray[p + w] + gray[p + w + 1] - gray[p - w - 1] - 2 * gray[p - w] - gray[p - w + 1];
+        const magnitude = Math.hypot(gx, gy);
+        if (magnitude < 120) continue;
+        edges.push(p);
+        const dx = gx / magnitude;
+        const dy = gy / magnitude;
+        for (const sign of [-1, 1]) {
+          for (let r = minR; r <= maxR; r += 1) {
+            const cx = Math.round(x + sign * dx * r);
+            const cy = Math.round(y + sign * dy * r);
+            if (cx < 0 || cy < 0 || cx >= w || cy >= h) break;
+            votes[cy * w + cx] += 1;
+          }
+        }
+      }
+    }
+    const smooth = boxMean(votes, w, h, 2);
+    const looksLikeBackdrop = (x, y) => {
+      const i = ((Math.round(y) * step) * width + Math.round(x) * step) * 4;
+      return distance(data, i, ...backdrop) < 60;
+    };
+    const rings = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      let best = -1;
+      for (let p = 0; p < w * h; p += 1) if (best < 0 || smooth[p] > smooth[best]) best = p;
+      if (best < 0 || smooth[best] < 2) break;
+      const cx = best % w;
+      const cy = (best - cx) / w;
+      // Clear the area around this peak before looking for the next one.
+      for (let y = Math.max(0, cy - minR); y < Math.min(h, cy + minR); y += 1) {
+        for (let x = Math.max(0, cx - minR); x < Math.min(w, cx + minR); x += 1) smooth[y * w + x] = 0;
+      }
+      // Radius: the distance most edge pixels share.
+      const counts = new Uint32Array(maxR + 2);
+      for (const p of edges) {
+        const ex = p % w;
+        const d = Math.round(Math.hypot(ex - cx, (p - ex) / w - cy));
+        if (d >= minR && d <= maxR) counts[d] += 1;
+      }
+      let r = minR;
+      for (let d = minR; d <= maxR; d += 1) if (counts[d] > counts[r]) r = d;
+      // Checks, sampled around the circle.
+      const share = (test) => {
+        let yes = 0;
+        let all = 0;
+        for (let y = Math.max(0, cy - r * 1.3); y < Math.min(h, cy + r * 1.3); y += 2) {
+          for (let x = Math.max(0, cx - r * 1.3); x < Math.min(w, cx + r * 1.3); x += 2) {
+            const d = Math.hypot(x - cx, y - cy);
+            const result = test(d, x, y);
+            if (result === null) continue;
+            all += 1;
+            if (result) yes += 1;
+          }
+        }
+        return all ? yes / all : 0;
+      };
+      const inside = share((d, x, y) => (d < r * 0.75 ? looksLikeBackdrop(x, y) : null));
+      const around = share((d, x, y) => (d > r * 1.12 && d < r * 1.3 ? looksLikeBackdrop(x, y) : null));
+      const rim = share((d, x, y) => (Math.abs(d - r) < 2.5 ? !looksLikeBackdrop(x, y) : null));
+      if (inside >= 0.85 && around >= 0.6 && rim >= 0.55) rings.push({ x: cx * step, y: cy * step, r: r * step });
+    }
+    return rings;
+  }
+
   // Cleans the refined outline using the backdrop's colour. Backdrop is a
   // pixel close to the backdrop colour, or a lighter or darker shade of it
   // (a fold, a cast shadow), that is not on a sharp edge: cloth folds are
@@ -454,7 +547,7 @@
     }
     // Widen sharp edges a little so a thin part between two of them (the
     // shiny middle of a metal ring) counts as product too.
-    for (let pass = 0; pass < 2; pass += 1) {
+    for (let pass = 0; pass < 3; pass += 1) {
       const grown = sharp.slice();
       for (let p = 0; p < total; p += 1) {
         if (sharp[p]) continue;
@@ -477,26 +570,21 @@
     const candidate = new Uint8Array(total);
     for (let p = 0; p < total; p += 1) if (!background[p] && looksLikeBackdrop(p)) candidate[p] = 1;
 
-    // Backdrop along the outside of the outline.
-    let edge = [];
-    for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
-    for (let step = 1; edge.length; step += 1) {
-      const next = [];
-      for (const p of edge) {
-        for (const n of neighbours(p, width, total)) {
-          // Only where the model itself is unsure: a white product on white
-          // cloth looks like the backdrop but the model knows it is product.
-          if (background[n] || !candidate[n] || confidence[n] > 0.5) continue;
-          background[n] = 1;
-          next.push(n);
+    // Backdrop inside key rings, even where the ring has a gap.
+    for (const ring of findKeyRings(state, backdrop)) {
+      const inner = ring.r - Math.max(3, ring.r * 0.06);
+      for (let y = Math.max(0, Math.floor(ring.y - inner)); y < Math.min(height, ring.y + inner); y += 1) {
+        for (let x = Math.max(0, Math.floor(ring.x - inner)); x < Math.min(width, ring.x + inner); x += 1) {
+          const p = y * width + x;
+          if (candidate[p] && Math.hypot(x - ring.x, y - ring.y) < inner) background[p] = 1;
         }
       }
-      edge = next;
     }
 
     // Backdrop inside loops.
     const seen = new Uint8Array(total);
-    const minPatch = total * 0.0004;
+    // Small enough for the inside of a chain link.
+    const minPatch = total * 0.00006;
     for (let start = 0; start < total; start += 1) {
       if (!candidate[start] || seen[start] || background[start]) continue;
       const patch = [start];
@@ -516,6 +604,23 @@
       if (!open && patch.length >= minPatch && thinlyEnclosed(state, patch)) {
         for (const p of patch) background[p] = 1;
       }
+    }
+
+    // Backdrop along the outside of the outline.
+    let edge = [];
+    for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
+    for (let step = 1; edge.length; step += 1) {
+      const next = [];
+      for (const p of edge) {
+        for (const n of neighbours(p, width, total)) {
+          // Only where the model itself is unsure: a white product on white
+          // cloth looks like the backdrop but the model knows it is product.
+          if (background[n] || !candidate[n] || confidence[n] > 0.5) continue;
+          background[n] = 1;
+          next.push(n);
+        }
+      }
+      edge = next;
     }
   }
 
