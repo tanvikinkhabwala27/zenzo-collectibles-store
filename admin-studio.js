@@ -331,6 +331,173 @@
     return probability;
   }
 
+  // Mean over a (2r+1) square around each pixel, using a summed-area table.
+  function boxMean(values, width, height, r) {
+    const sums = new Float64Array((width + 1) * (height + 1));
+    for (let y = 0; y < height; y += 1) {
+      let row = 0;
+      for (let x = 0; x < width; x += 1) {
+        row += values[y * width + x];
+        sums[(y + 1) * (width + 1) + x + 1] = sums[y * (width + 1) + x + 1] + row;
+      }
+    }
+    const out = new Float32Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      const y0 = Math.max(0, y - r);
+      const y1 = Math.min(height, y + r + 1);
+      for (let x = 0; x < width; x += 1) {
+        const x0 = Math.max(0, x - r);
+        const x1 = Math.min(width, x + r + 1);
+        const sum = sums[y1 * (width + 1) + x1] - sums[y0 * (width + 1) + x1] - sums[y1 * (width + 1) + x0] + sums[y0 * (width + 1) + x0];
+        out[y * width + x] = sum / ((y1 - y0) * (x1 - x0));
+      }
+    }
+    return out;
+  }
+
+  // Colour guided filter (He, Sun and Tang): snaps a rough mask to the edges
+  // in the photo, so the model's soft, slightly wide outline follows the
+  // real outline of the product, fibres and thin metal included.
+  function guidedFilter(data, mask, width, height, r, eps) {
+    const total = width * height;
+    const channel = [0, 1, 2].map((c) => {
+      const values = new Float32Array(total);
+      for (let p = 0; p < total; p += 1) values[p] = data[p * 4 + c] / 255;
+      return values;
+    });
+    const product = (a, b) => {
+      const values = new Float32Array(total);
+      for (let p = 0; p < total; p += 1) values[p] = a[p] * b[p];
+      return values;
+    };
+    const mean = channel.map((values) => boxMean(values, width, height, r));
+    const meanMask = boxMean(mask, width, height, r);
+    const meanTimesMask = channel.map((values) => boxMean(product(values, mask), width, height, r));
+    const pairs = [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]];
+    const meanPairs = pairs.map(([i, j]) => boxMean(product(channel[i], channel[j]), width, height, r));
+    const a = [new Float32Array(total), new Float32Array(total), new Float32Array(total)];
+    const b = new Float32Array(total);
+    for (let p = 0; p < total; p += 1) {
+      const m = [mean[0][p], mean[1][p], mean[2][p]];
+      const rr = meanPairs[0][p] - m[0] * m[0] + eps;
+      const rg = meanPairs[1][p] - m[0] * m[1];
+      const rb = meanPairs[2][p] - m[0] * m[2];
+      const gg = meanPairs[3][p] - m[1] * m[1] + eps;
+      const gb = meanPairs[4][p] - m[1] * m[2];
+      const bb = meanPairs[5][p] - m[2] * m[2] + eps;
+      const cov = [0, 1, 2].map((c) => meanTimesMask[c][p] - m[c] * meanMask[p]);
+      // Inverse of the symmetric 3x3 covariance.
+      const i00 = gg * bb - gb * gb;
+      const i01 = rb * gb - rg * bb;
+      const i02 = rg * gb - rb * gg;
+      const i11 = rr * bb - rb * rb;
+      const i12 = rb * rg - rr * gb;
+      const i22 = rr * gg - rg * rg;
+      const det = rr * i00 + rg * i01 + rb * i02;
+      const a0 = (i00 * cov[0] + i01 * cov[1] + i02 * cov[2]) / det;
+      const a1 = (i01 * cov[0] + i11 * cov[1] + i12 * cov[2]) / det;
+      const a2 = (i02 * cov[0] + i12 * cov[1] + i22 * cov[2]) / det;
+      a[0][p] = a0;
+      a[1][p] = a1;
+      a[2][p] = a2;
+      b[p] = meanMask[p] - a0 * m[0] - a1 * m[1] - a2 * m[2];
+    }
+    const meanA = a.map((values) => boxMean(values, width, height, r));
+    const meanB = boxMean(b, width, height, r);
+    const out = new Float32Array(total);
+    for (let p = 0; p < total; p += 1) {
+      const value = meanA[0][p] * channel[0][p] + meanA[1][p] * channel[1][p] + meanA[2][p] * channel[2][p] + meanB[p];
+      out[p] = Math.min(1, Math.max(0, value));
+    }
+    return out;
+  }
+
+  // Cleans the refined outline using the backdrop's colour. Backdrop is a
+  // pixel close to the backdrop colour, or a lighter or darker shade of it
+  // (a fold, a cast shadow), that is not on a sharp edge: cloth folds are
+  // soft, while metal and fibres have sharp detail and stay.
+  //  - Backdrop seen through a loop (inside a key ring) is removed when only
+  //    a thin part of the product surrounds it; white parts set inside thick
+  //    product (the pads of a paw) stay.
+  //  - Backdrop along the outside of the outline is removed where the model
+  //    is unsure, and close to the outline even where it is sure.
+  function clearBackdropInOutline(state, backdrop) {
+    const { data, background, width } = state;
+    const total = background.length;
+    const height = total / width;
+    const lum = new Float32Array(total);
+    for (let p = 0; p < total; p += 1) lum[p] = (data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2]) / 3;
+    const sharp = new Uint8Array(total);
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const p = y * width + x;
+        const gx = lum[p - width + 1] + 2 * lum[p + 1] + lum[p + width + 1] - lum[p - width - 1] - 2 * lum[p - 1] - lum[p + width - 1];
+        const gy = lum[p + width - 1] + 2 * lum[p + width] + lum[p + width + 1] - lum[p - width - 1] - 2 * lum[p - width] - lum[p - width + 1];
+        if (Math.hypot(gx, gy) > 150) sharp[p] = 1;
+      }
+    }
+    // Widen sharp edges a little so a thin part between two of them (the
+    // shiny middle of a metal ring) counts as product too.
+    for (let pass = 0; pass < 2; pass += 1) {
+      const grown = sharp.slice();
+      for (let p = 0; p < total; p += 1) {
+        if (sharp[p]) continue;
+        const x = p % width;
+        if ((x > 0 && sharp[p - 1]) || (x < width - 1 && sharp[p + 1]) || sharp[p - width] || sharp[p + width]) grown[p] = 1;
+      }
+      sharp.set(grown);
+    }
+    const backdropSum = backdrop[0] + backdrop[1] + backdrop[2];
+    const looksLikeBackdrop = (p) => {
+      if (sharp[p]) return false;
+      const i = p * 4;
+      if (distance(data, i, ...backdrop) < 60) return true;
+      const sum = data[i] + data[i + 1] + data[i + 2];
+      const level = sum / backdropSum;
+      if (level < 0.35 || level > 1.15) return false;
+      for (let c = 0; c < 3; c += 1) if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.045) return false;
+      return true;
+    };
+    const candidate = new Uint8Array(total);
+    for (let p = 0; p < total; p += 1) if (!background[p] && looksLikeBackdrop(p)) candidate[p] = 1;
+
+    // Backdrop along the outside of the outline.
+    const reach = Math.round(Math.max(width, height) * 0.011);
+    let edge = [];
+    for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
+    for (let step = 1; edge.length; step += 1) {
+      const next = [];
+      for (const p of edge) {
+        for (const n of neighbours(p, width, total)) {
+          if (background[n] || !candidate[n] || (step > reach && data[n * 4 + 3] > 235)) continue;
+          background[n] = 1;
+          next.push(n);
+        }
+      }
+      edge = next;
+    }
+
+    // Backdrop inside loops.
+    const seen = new Uint8Array(total);
+    const minPatch = total * 0.0004;
+    for (let start = 0; start < total; start += 1) {
+      if (!candidate[start] || seen[start] || background[start]) continue;
+      const patch = [start];
+      seen[start] = 1;
+      for (let k = 0; k < patch.length; k += 1) {
+        for (const n of neighbours(patch[k], width, total)) {
+          if (candidate[n] && !seen[n] && !background[n]) {
+            seen[n] = 1;
+            patch.push(n);
+          }
+        }
+      }
+      if (patch.length >= minPatch && thinlyEnclosed(state, patch)) {
+        for (const p of patch) background[p] = 1;
+      }
+    }
+  }
+
   // Same result shape as prepareCutOut, with soft edges kept in the alpha
   // channel. Returns null when the model is unavailable or finds nothing.
   async function aiCutOut(img) {
@@ -351,10 +518,16 @@
     const data = ctx.getImageData(0, 0, width, height).data;
     const total = width * height;
     const background = new Uint8Array(total);
+    const rough = new Float32Array(total);
+    for (let p = 0; p < total; p += 1) {
+      // Firm up the upscaled mask before refining it.
+      const t = Math.min(1, Math.max(0, (probability[p] - 0.25) / 0.5));
+      rough[p] = t * t * (3 - 2 * t);
+    }
+    const refined = guidedFilter(data, rough, width, height, Math.max(4, Math.round(Math.max(width, height) * 0.008)), 0.002);
     let kept = 0;
     for (let p = 0; p < total; p += 1) {
-      // Firm up the upscaled mask while keeping a soft edge.
-      const t = Math.min(1, Math.max(0, (probability[p] - 0.25) / 0.5));
+      const t = Math.min(1, Math.max(0, (refined[p] - 0.1) / 0.8));
       const alpha = t * t * (3 - 2 * t);
       data[p * 4 + 3] = Math.round(alpha * 255);
       if (alpha < 0.04) background[p] = 1;
@@ -373,46 +546,7 @@
     const backdrop = [median(0), median(1), median(2)];
     const plain = border.filter((p) => distance(data, p * 4, ...backdrop) < 60).length / border.length;
     if (plain > 0.6) {
-      // Twice: clearing the middle of a key ring leaves slivers along its
-      // inside edge that the second pass picks up.
-      removeEnclosedBackdrop(state, backdrop);
-      removeEnclosedBackdrop(state, backdrop, { minShare: 0.0004 });
-      // The model's outline runs a little wide: backdrop-coloured pixels next
-      // to the background are backdrop where the model is unsure, and also
-      // where it is sure but close to the outline. White parts deeper inside
-      // the product are never touched.
-      // Close to the outline the same holds even where the model is sure.
-      const reach = Math.round(Math.max(width, height) * 0.011);
-      const backdropSum = backdrop[0] + backdrop[1] + backdrop[2];
-      const lum = (i) => data[i] + data[i + 1] + data[i + 2];
-      // A lighter or darker shade of the backdrop (a fold, a cast shadow)
-      // that is smooth; metal and fibres have sharp detail and stay.
-      const backdropShade = (p) => {
-        const i = p * 4;
-        const sum = lum(i);
-        const level = sum / backdropSum;
-        if (level < 0.45 || level > 1.15) return false;
-        for (let c = 0; c < 3; c += 1) if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.025) return false;
-        const x = p % width;
-        for (const n of [x > 1 ? p - 2 : -1, x < width - 2 ? p + 2 : -1, p - 2 * width, p + 2 * width]) {
-          if (n >= 0 && n < total && Math.abs(lum(n * 4) - sum) > 54) return false;
-        }
-        return true;
-      };
-      let edge = [];
-      for (let p = 0; p < total; p += 1) if (background[p]) edge.push(p);
-      for (let step = 1; edge.length; step += 1) {
-        const next = [];
-        for (const p of edge) {
-          for (const n of neighbours(p, width, total)) {
-            if (background[n] || (step > reach && data[n * 4 + 3] > 235)) continue;
-            if (distance(data, n * 4, ...backdrop) >= 70 && !backdropShade(n)) continue;
-            background[n] = 1;
-            next.push(n);
-          }
-        }
-        edge = next;
-      }
+      clearBackdropInOutline(state, backdrop);
       for (let p = 0; p < total; p += 1) {
         const i = p * 4;
         const alpha = data[i + 3] / 255;
@@ -681,7 +815,8 @@
     scaled.width = Math.max(1, Math.round(width));
     scaled.height = Math.max(1, Math.round(height));
     const scaledCtx = context(scaled);
-    scaledCtx.filter = "contrast(1.05) saturate(1.06)";
+    // A touch darker, like the softly lit accessory photos.
+    scaledCtx.filter = "contrast(1.05) saturate(1.06) brightness(0.94)";
     scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
     sharpen(scaled, scale < 1 ? 0.35 : 0.55);
     const darkness = (150 - brightness(scaled)) / 90;
@@ -945,7 +1080,7 @@
     for (const piece of pieces) {
       const near = piece.maxX >= main.minX - margin && piece.minX <= main.maxX + margin
         && piece.maxY >= main.minY - margin && piece.minY <= main.maxY + margin;
-      keep[piece.id] = piece === main || (near && piece.area >= 30 && piece.minY < below) ? 1 : 0;
+      keep[piece.id] = piece === main || (near && piece.area >= Math.max(30, width * height * 0.0003) && piece.minY < below) ? 1 : 0;
     }
     for (let p = 0; p < width * height; p += 1) {
       if (label[p] && !keep[label[p]]) background[p] = 1;
