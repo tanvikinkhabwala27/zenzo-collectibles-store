@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-52">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-54">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -191,8 +191,53 @@
       </div>
     </main>
 
+    <dialog class="photo-adjuster" id="photoAdjuster" aria-labelledby="photoAdjusterTitle">
+      <div class="photo-adjuster__panel">
+        <header class="photo-adjuster__header">
+          <div>
+            <p class="eyebrow">Product photo</p>
+            <h2 id="photoAdjusterTitle">Adjust photo</h2>
+          </div>
+          <button class="photo-adjuster__close" type="button" data-photo-adjuster-close aria-label="Close photo editor">&times;</button>
+        </header>
+        <div class="photo-adjuster__layout">
+          <div class="photo-adjuster__preview" data-photo-adjuster-stage>
+            <canvas width="1000" height="1000" aria-label="Edited product photo preview"></canvas>
+            <span>Drag to reposition</span>
+          </div>
+          <div class="photo-adjuster__controls">
+            <label class="photo-adjuster__control">
+              <span>Zoom <output data-photo-value="zoom">100%</output></span>
+              <input name="zoom" type="range" min="70" max="250" value="100">
+            </label>
+            <label class="photo-adjuster__control">
+              <span>Brightness <output data-photo-value="brightness">100%</output></span>
+              <input name="brightness" type="range" min="65" max="145" value="100">
+            </label>
+            <label class="photo-adjuster__control">
+              <span>Contrast <output data-photo-value="contrast">100%</output></span>
+              <input name="contrast" type="range" min="65" max="145" value="100">
+            </label>
+            <div class="photo-adjuster__tools" aria-label="Photo rotation controls">
+              <button class="account-link" type="button" data-photo-rotate="-90">Rotate left</button>
+              <button class="account-link" type="button" data-photo-rotate="90">Rotate right</button>
+            </div>
+            <button class="account-link" type="button" data-photo-reset>Reset adjustments</button>
+          </div>
+        </div>
+        <footer class="photo-adjuster__footer">
+          <p role="status" aria-live="polite" data-photo-adjuster-message></p>
+          <div>
+            <button class="account-link" type="button" data-photo-adjuster-cancel>Cancel</button>
+            <button class="admin-order__action" type="button" data-photo-adjuster-save>Use edited photo</button>
+          </div>
+        </footer>
+      </div>
+    </dialog>
+
     <script src="showcase-images.js?v=zenzo-race-theme-48"></script>
     <script src="admin-studio.js?v=zenzo-race-theme-51"></script>
-    <script src="admin.js?v=zenzo-race-theme-48"></script>
+    <script src="admin-photo-editor.js?v=zenzo-race-theme-1"></script>
+    <script src="admin.js?v=zenzo-race-theme-49"></script>
   </body>
 </html>

@@ -253,7 +253,7 @@ function showPreview(form, photo) {
   const preview = form.querySelector(".studio-preview");
   if (!preview) return;
   preview.hidden = false;
-  preview.querySelector("img").src = photo.dataUrl;
+  preview.querySelector("img").src = photo.editedDataUrl || photo.dataUrl;
   let choices = preview.querySelector(".studio-choices");
   if (photo.variants && !choices) {
     choices = document.createElement("div");
@@ -293,6 +293,14 @@ function showPreview(form, photo) {
     preview.append(reset);
   }
   if (reset) reset.hidden = !photo.canEdit;
+  let adjust = preview.querySelector(".studio-adjust");
+  if (!adjust) {
+    adjust = document.createElement("button");
+    adjust.type = "button";
+    adjust.className = "account-link studio-adjust";
+    preview.querySelector("p").before(adjust);
+  }
+  adjust.textContent = photo.editedDataUrl ? "Adjust crop & lighting again" : "Adjust crop & lighting";
 }
 
 // Builds the photo for a form from its file input and studio switch, and
@@ -327,7 +335,7 @@ async function preparePhoto(form) {
 async function photoFor(form) {
   if (!form.elements.image?.files[0]) return "";
   const photo = await (preparedPhotos.get(form) || preparePhoto(form));
-  return photo.dataUrl;
+  return photo.editedDataUrl || photo.dataUrl;
 }
 
 document.addEventListener("change", (event) => {
@@ -342,6 +350,14 @@ async function fileFromUrl(url) {
   if (!response.ok) throw new Error("A product photo could not be loaded.");
   const blob = await response.blob();
   return new File([blob], "current-photo.jpg", { type: blob.type || "image/jpeg" });
+}
+
+async function prepareExistingPhoto(form, url) {
+  const file = await fileFromUrl(url);
+  const files = new DataTransfer();
+  files.items.add(file);
+  form.elements.image.files = files.files;
+  return preparePhoto(form);
 }
 
 // Bulk studio look: runs every product photo that does not have the dark
@@ -492,14 +508,7 @@ document.addEventListener("click", async (event) => {
   const form = button.closest("form");
   button.disabled = true;
   try {
-    const response = await fetch(button.dataset.reedit);
-    if (!response.ok) throw new Error("The current photo could not be loaded.");
-    const blob = await response.blob();
-    const file = new File([blob], "current-photo.jpg", { type: blob.type || "image/jpeg" });
-    const files = new DataTransfer();
-    files.items.add(file);
-    form.elements.image.files = files.files;
-    form.elements.image.dispatchEvent(new Event("change", { bubbles: true }));
+    await prepareExistingPhoto(form, button.dataset.reedit);
   } catch (error) {
     alert(error.message);
   } finally {
@@ -513,14 +522,25 @@ document.addEventListener("click", async (event) => {
   const job = form && preparedPhotos.get(form);
   if (!job) return;
   const photo = await job;
+  if (event.target.closest(".studio-adjust")) {
+    const edited = await window.zenzoPhotoEditor.open(photo.editedDataUrl || photo.dataUrl);
+    if (edited) {
+      photo.editedDataUrl = edited;
+      showPreview(form, photo);
+      preview.querySelector("p").textContent = "Edited photo ready. Select Save changes to publish it.";
+    }
+    return;
+  }
   const choice = event.target.closest("[data-studio-choice]");
   if (choice && photo.variants) {
     photo.choice = choice.dataset.studioChoice;
+    delete photo.editedDataUrl;
     showPreview(form, photo);
     return;
   }
   if (!photo.canEdit) return;
   if (event.target.closest(".studio-reset")) {
+    delete photo.editedDataUrl;
     photo.reset();
     showPreview(form, photo);
     return;
@@ -529,6 +549,7 @@ document.addEventListener("click", async (event) => {
   if (!img) return;
   const box = img.getBoundingClientRect();
   const removed = photo.removeAt((event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height);
+  if (removed) delete photo.editedDataUrl;
   showPreview(form, photo);
   if (!removed) preview.querySelector("p").textContent = "Tap directly on the leftover background inside the product to remove it.";
 });
@@ -606,7 +627,10 @@ async function renderProducts() {
         <h3>${escapeHtml(product.name)}${product.colorName ? ` <span class="admin-colour"><span class="admin-colour__dot" style="background: ${escapeHtml(product.colorHex || "#8a8f98")}"></span>${escapeHtml(product.colorName)}</span>` : ""}</h3>
         <p>${escapeHtml(collection)} &middot; ${escapeHtml(product.series)} &middot; ${money.format(product.price)} &middot; Stock ${product.stock}</p>
       </div>
-      <button class="remove-button" type="button" data-delete="${escapeHtml(product.id)}">Delete</button>
+      <div class="admin-product__quick-actions">
+        ${currentPhotoUrl(product) ? `<button class="account-link" type="button" data-edit-photo="${escapeHtml(product.id)}">Edit photo</button>` : ""}
+        <button class="remove-button" type="button" data-delete="${escapeHtml(product.id)}">Delete</button>
+      </div>
       <details class="admin-product__edit">
         <summary>Edit</summary>
         <form class="form-grid" data-edit="${escapeHtml(product.id)}">
@@ -779,6 +803,34 @@ productsList.addEventListener("submit", async (event) => {
 });
 
 productsList.addEventListener("click", async (event) => {
+  const editPhotoButton = event.target.closest("[data-edit-photo]");
+  if (editPhotoButton) {
+    const product = knownProducts.find((item) => String(item.id) === editPhotoButton.dataset.editPhoto);
+    const card = editPhotoButton.closest(".admin-product");
+    const details = card?.querySelector(".admin-product__edit");
+    const form = details?.querySelector("form");
+    if (!product || !form) return;
+    details.open = true;
+    editPhotoButton.disabled = true;
+    editPhotoButton.textContent = "Preparing...";
+    try {
+      const photo = await prepareExistingPhoto(form, sourcePhotoUrl(product));
+      const edited = await window.zenzoPhotoEditor.open(photo.dataUrl);
+      if (edited) {
+        photo.editedDataUrl = edited;
+        showPreview(form, photo);
+        form.querySelector(".studio-preview p").textContent = "Edited photo ready. Select Save changes to publish it.";
+        form.querySelector(".studio-preview").scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      editPhotoButton.disabled = false;
+      editPhotoButton.textContent = "Edit photo";
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-delete]");
   if (!button) return;
   const name = button.closest(".admin-product")?.querySelector("h3")?.textContent || "this product";
