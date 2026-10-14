@@ -828,10 +828,18 @@
       drawLights(ctx, 0.38, 0.62);
     }
     if (background > 0) {
-      // Lighter background for dark products, keeping a hint of the side
-      // lights.
-      ctx.fillStyle = `rgba(150, 153, 160, ${background})`;
+      // Behind dark products: a soft, deep red glow in the middle that fades
+      // into the dark edges, in the shop's red and dark colours.
+      ctx.save();
+      const glow = ctx.createRadialGradient(size / 2, size * 0.47, 0, size / 2, size * 0.47, size * 0.62);
+      for (const [stop, alpha] of [[0, 1], [0.35, 0.85], [0.65, 0.4], [1, 0]]) {
+        glow.addColorStop(stop, `rgba(150, 26, 38, ${alpha * background})`);
+      }
+      ctx.fillStyle = glow;
       ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = `rgba(70, 10, 18, ${background * 0.35})`;
+      ctx.fillRect(0, 0, size, size);
+      ctx.restore();
     }
     const image = product.canvas;
     // Same size and position as the product in the accessory photos.
@@ -1393,10 +1401,10 @@
 
   const noAdjustments = { rotation: 0, zoom: 1, offsetX: 0, offsetY: 0, brightness: 1, contrast: 1, background: 0 };
 
-  // How much to lighten the background behind a product (0 to 0.7): dark
-  // and black products would blend into the dark studio background, so the
-  // background is lifted towards a soft grey; the product itself is left
-  // exactly as it is.
+  // How strong a red glow to put behind a product (0 to 1): dark and black
+  // products would blend into the dark studio background, so the background
+  // gets a soft red glow behind them; the product itself is left exactly as
+  // it is.
   function backgroundFor(product) {
     const { canvas } = product;
     const { data } = context(canvas, { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
@@ -1409,7 +1417,7 @@
     }
     if (!solid) return 0;
     const share = dark / solid;
-    return Math.round(Math.min(0.6, Math.max(0, (share - 0.2) * 1.2)) * 100) / 100;
+    return Math.round(Math.min(0.9, Math.max(0, (share - 0.15) * 2)) * 100) / 100;
   }
 
   // The admin's manual adjustments act on the cut-out product only: turning
