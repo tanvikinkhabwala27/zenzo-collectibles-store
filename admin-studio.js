@@ -817,7 +817,9 @@
   // Accessory look, as in the accessory photos: a near-black seamless
   // background with faint red and blue at the sides, the product floating in
   // the middle with a soft shadow and no stand.
-  function composeFloating(ctx, product, { accent = false, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
+  // The product photo on the background, and nothing else: no stand,
+  // shadow, glow or colour change, so it looks exactly as it is.
+  function composeFloating(ctx, product, { zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
     if (accessoryBackdrop) {
       ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
     } else {
@@ -835,38 +837,19 @@
     const scaled = document.createElement("canvas");
     scaled.width = Math.max(1, Math.round(width));
     scaled.height = Math.max(1, Math.round(height));
-    const scaledCtx = context(scaled);
-    // A touch darker, like the softly lit accessory photos.
-    scaledCtx.filter = "contrast(1.05) saturate(1.06) brightness(0.94)";
-    scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
-    sharpen(scaled, scale < 1 ? 0.35 : 0.55);
-    const darkness = (150 - brightness(scaled)) / 90;
-    const strength = Math.min(1, Math.max(0.35, darkness));
-    if (accent) backGlow(ctx, x, y, width, height);
-
-    ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
-    ctx.filter = "blur(18px)";
-    ctx.beginPath();
-    ctx.ellipse(x + width / 2, y + height + size * 0.015, width * 0.4, Math.max(8, size * 0.018), 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    if (accent) {
-      rimLight(ctx, scaled, x, y, strength);
-      ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
-    } else {
-      ctx.drawImage(scaled, x, y, width, height);
-    }
-    if (!accessoryBackdrop) vignette(ctx);
-    return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
+    context(scaled).drawImage(image, 0, 0, scaled.width, scaled.height);
+    // Only an enlarged photo gets light sharpening, to undo the blur of
+    // enlarging.
+    if (scale > 1) sharpen(scaled, 0.35);
+    ctx.drawImage(scaled, x, y, width, height);
+    return { x, y, scale, minX: product.minX, minY: product.minY };
   }
 
   // accent: false draws the standard look; true adds the red and blue edge
   // light, stronger for darker products. stand: false uses the accessory
   // look without the display base.
-  function composeCutOut(ctx, product, { accent = false, stand = true, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
-    if (!stand) return composeFloating(ctx, product, { accent, zoom, offsetX, offsetY });
+  function composeCutOut(ctx, product, { accent = false, stand = false, zoom = 1, offsetX = 0, offsetY = 0 } = {}) {
+    if (!stand) return composeFloating(ctx, product, { zoom, offsetX, offsetY });
     drawStage(ctx);
     const image = product.canvas;
     // Enlarging a small photo more than this only adds blur, so small
@@ -1445,7 +1428,7 @@
     photo.adjustable = true;
     photo.adjustments = { ...noAdjustments };
     photo.renderVariants = () => {
-      for (const variant of ["standard", "accent"]) {
+      for (const variant of ["standard"]) {
         const fresh = newCanvas();
         last = draw(context(fresh), variant, photo.adjustments);
         photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
@@ -1514,14 +1497,10 @@
     }
 
     if (hasDarkBackdrop(img)) {
+      // Already on a dark studio background: kept exactly as it is.
       photo.mode = "restyle";
-      photo.variants = {};
-      for (const variant of ["standard", "accent"]) {
-        const fresh = newCanvas();
-        composeRestyle(context(fresh), img, { accent: variant === "accent" });
-        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
-      }
-      // These photos already have the studio look: start unchanged.
+      composeOriginal(ctx, img);
+      photo.variants = { standard: canvas.toDataURL("image/jpeg", quality) };
       photo.choice = "standard";
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
@@ -1534,14 +1513,12 @@
     const initial = (await aiCutOut(img)) || prepareCutOut(img);
     const product = initial && productCanvas(initial);
     if (!product) {
+      // The product could not be separated: the photo as it is, cropped
+      // square.
       photo.mode = "studio-photo";
-      photo.variants = {};
-      for (const variant of ["standard", "accent"]) {
-        const fresh = newCanvas();
-        composeFullPhoto(context(fresh), img, { accent: variant === "accent" });
-        photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
-      }
-      photo.choice = averageBrightness(img) < 85 ? "accent" : "standard";
+      composeOriginal(ctx, img);
+      photo.variants = { standard: canvas.toDataURL("image/jpeg", quality) };
+      photo.choice = "standard";
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
         get: () => photo.variants[photo.choice],
@@ -1566,7 +1543,7 @@
     photo.choice = "standard";
     makeAdjustable(photo, () => current, (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }));
     placement = photo.renderVariants();
-    photo.choice = placement.dark ? "accent" : "standard";
+    photo.choice = "standard";
 
     const render = () => {
       const next = productCanvas(state);

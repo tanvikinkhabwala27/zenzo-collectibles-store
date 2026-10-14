@@ -255,16 +255,17 @@ function showPreview(form, photo) {
   preview.hidden = false;
   preview.querySelector("img").src = photo.editedDataUrl || photo.dataUrl;
   let choices = preview.querySelector(".studio-choices");
-  if (photo.variants && !choices) {
+  if (photo.variants && Object.keys(photo.variants).length > 1 && !choices) {
     choices = document.createElement("div");
     choices.className = "studio-choices";
     choices.setAttribute("role", "group");
     choices.setAttribute("aria-label", "Choose the photo style");
     preview.querySelector("img").after(choices);
   }
+  const several = Boolean(photo.variants && Object.keys(photo.variants).length > 1);
   if (choices) {
-    choices.hidden = !photo.variants;
-    if (photo.variants) {
+    choices.hidden = !several;
+    if (several) {
       choices.innerHTML = [
         ["standard", "Standard"],
         ["accent", "Red accent", "Best for dark or black products"]
@@ -380,7 +381,7 @@ let bulkResults = [];
 
 function renderBulkReview() {
   if (!bulkResults.length) {
-    bulkStudio.innerHTML = '<p class="checkout-note">Every product photo already has the studio look. To add red accents to one, use Edit, then "Or edit the current photo".</p>';
+    bulkStudio.innerHTML = '<p class="checkout-note">Every product photo already has the studio look.</p>';
     return;
   }
   const selected = bulkResults.filter((item) => item.include).length;
@@ -388,7 +389,7 @@ function renderBulkReview() {
     <div class="admin-orders-head">
       <div>
         <h2>Review ${bulkResults.length} ${bulkResults.length === 1 ? "photo" : "photos"}</h2>
-        <p class="checkout-note">Pick Standard or Red accent for each, untick any to leave as they are, then save.</p>
+        <p class="checkout-note">Untick any to leave as they are, then save.</p>
       </div>
       <button class="remove-button account-link" type="button" data-bulk-cancel>Cancel</button>
     </div>
@@ -401,12 +402,7 @@ function renderBulkReview() {
           </label>
           <div class="bulk-studio__photos">
             <figure><img src="${escapeHtml(item.url)}" alt=""><figcaption>Now</figcaption></figure>
-            ${["standard", "accent"].map((variant) => `
-              <button class="studio-choice${item.photo.choice === variant ? " is-selected" : ""}" type="button" data-bulk-item="${index}" data-bulk-choice="${variant}" aria-pressed="${item.photo.choice === variant}">
-                <img src="${item.photo.variants[variant]}" alt="">
-                <span>${variant === "accent" ? "Red accent" : "Standard"}</span>
-              </button>
-            `).join("")}
+            <figure><img src="${item.photo.dataUrl}" alt=""><figcaption>New</figcaption></figure>
           </div>
         </article>
       `).join("")}
@@ -564,10 +560,9 @@ document.addEventListener("click", async (event) => {
 
 let knownProducts = [];
 
-// Hot Wheels photos sit on the black display stand like the car photos;
-// every other collection floats like the accessory photos.
-function usesStand(collection) {
-  return (collection || "Hot Wheels") === "Hot Wheels";
+function usesStand() {
+  // Every product floats on the plain studio background: no stand.
+  return false;
 }
 
 // The photo shoppers currently see for a product.
@@ -680,7 +675,7 @@ async function renderProducts() {
             Replace photo (optional)
             <input name="image" type="file" accept="image/*">
           </label>
-          ${currentPhotoUrl(product) ? `<button class="remove-button account-link field--full" type="button" data-reedit="${escapeHtml(sourcePhotoUrl(product))}">Or edit the current photo (Standard / Red accent)</button>` : ""}
+          ${currentPhotoUrl(product) ? `<button class="remove-button account-link field--full" type="button" data-reedit="${escapeHtml(sourcePhotoUrl(product))}">Or edit the current photo</button>` : ""}
           <label class="studio-toggle field--full">
             <input name="studio" type="checkbox" checked>
             Studio look, like the other product photos
