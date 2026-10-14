@@ -5,7 +5,7 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin | Zenzo</title>
-    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-54">
+    <link rel="stylesheet" href="styles.css?v=zenzo-race-theme-55">
   </head>
   <body class="checkout-page">
     <main class="checkout-shell">
@@ -203,9 +203,22 @@
         <div class="photo-adjuster__layout">
           <div class="photo-adjuster__preview" data-photo-adjuster-stage>
             <canvas width="1000" height="1000" aria-label="Edited product photo preview"></canvas>
-            <span>Drag to reposition</span>
+            <div class="photo-adjuster__cursor" data-photo-cursor hidden></div>
+            <span data-photo-hint>Drag to reposition</span>
           </div>
           <div class="photo-adjuster__controls">
+            <div class="photo-adjuster__brush" data-photo-brush hidden>
+              <div class="photo-adjuster__modes" role="group" aria-label="What dragging on the photo does">
+                <button class="account-link is-active" type="button" data-photo-tool="move" aria-pressed="true">Move</button>
+                <button class="account-link" type="button" data-photo-tool="erase" aria-pressed="false">Erase</button>
+                <button class="account-link" type="button" data-photo-tool="restore" aria-pressed="false">Restore</button>
+              </div>
+              <label class="photo-adjuster__control">
+                <span>Brush size <output data-photo-brush-value>3%</output></span>
+                <input name="brushSize" type="range" min="1" max="12" value="3">
+              </label>
+              <button class="account-link" type="button" data-photo-brush-undo>Undo brush changes</button>
+            </div>
             <label class="photo-adjuster__control">
               <span>Zoom <output data-photo-value="zoom">100%</output></span>
               <input name="zoom" type="range" min="70" max="250" value="100">
@@ -240,8 +253,8 @@
     </dialog>
 
     <script src="showcase-images.js?v=zenzo-race-theme-48"></script>
-    <script src="admin-studio.js?v=zenzo-race-theme-67"></script>
-    <script src="admin-photo-editor.js?v=zenzo-race-theme-4"></script>
+    <script src="admin-studio.js?v=zenzo-race-theme-70"></script>
+    <script src="admin-photo-editor.js?v=zenzo-race-theme-5"></script>
     <script src="admin.js?v=zenzo-race-theme-51"></script>
   </body>
 </html>

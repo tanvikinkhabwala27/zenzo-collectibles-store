@@ -642,6 +642,7 @@
     const ctx = context(canvas, { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, width, height);
     const data = ctx.getImageData(0, 0, width, height).data;
+    const source = new Uint8ClampedArray(data);
     const total = width * height;
     const background = new Uint8Array(total);
     const rough = new Float32Array(total);
@@ -660,7 +661,7 @@
       else kept += 1;
     }
     if (kept < total * 0.005 || kept > total * 0.95) return null;
-    const state = { width, height, data, background };
+    const state = { width, height, data, background, source };
 
     // On a plain backdrop, clear backdrop still showing through loops (a key
     // ring) and take the backdrop's colour out of the soft edges, so no
@@ -698,7 +699,7 @@
     const ctx = context(canvas, { willReadFrequently: true });
     ctx.drawImage(img, 0, 0, width, height);
     const data = ctx.getImageData(0, 0, width, height).data;
-    const state = { width, height, data, background: new Uint8Array(width * height) };
+    const state = { width, height, data, background: new Uint8Array(width * height), source: new Uint8ClampedArray(data) };
 
     const border = [];
     for (let x = 0; x < width; x += 1) border.push(x, (height - 1) * width + x);
@@ -870,7 +871,9 @@
     ctx.putImageData(pixels, 0, 0);
   }
 
-  function productCanvas(state) {
+  // bounds { minX, minY, width, height } keeps the product's frame fixed
+  // (while brushing, so it does not move or resize as edges are erased).
+  function productCanvas(state, bounds = null) {
     const { width, height, data, background } = state;
     let minX = width;
     let minY = height;
@@ -906,6 +909,12 @@
       }
     }
     if (maxX < minX) return null;
+    if (bounds) {
+      minX = bounds.minX;
+      minY = bounds.minY;
+      maxX = bounds.minX + bounds.width - 1;
+      maxY = bounds.minY + bounds.height - 1;
+    }
     const full = document.createElement("canvas");
     full.width = width;
     full.height = height;
@@ -1575,21 +1584,25 @@
       }
       return last.placement;
     };
+    let preview = null;
     photo.drawPreview = (ctx, adjust) => {
-      draw(ctx, photo.choice, { ...photo.adjustments, ...adjust });
+      preview = draw(ctx, photo.choice, { ...photo.adjustments, ...adjust });
     };
     photo.setAdjustments = (adjust) => {
       photo.adjustments = { ...photo.adjustments, ...adjust };
       photo.renderVariants();
     };
-    photo.toProduct = (u, v) => {
-      const { adjusted, placement } = last;
+    // fromPreview maps through the adjust dialog's latest preview, which
+    // may use adjustments not saved yet. Also returns the scale, so a brush
+    // size on the photo can be turned into cut-out pixels.
+    photo.toProduct = (u, v, { fromPreview = false } = {}) => {
+      const { adjusted, placement } = fromPreview && preview ? preview : last;
       const ax = (u * size - placement.x) / placement.scale - adjusted.canvas.width / 2;
       const ay = (v * size - placement.y) / placement.scale - adjusted.canvas.height / 2;
       const angle = (-adjusted.turn * Math.PI) / 180;
       const sx = ax * Math.cos(angle) - ay * Math.sin(angle) + adjusted.sourceWidth / 2;
       const sy = ax * Math.sin(angle) + ay * Math.cos(angle) + adjusted.sourceHeight / 2;
-      return { x: Math.floor(sx + adjusted.minX), y: Math.floor(sy + adjusted.minY) };
+      return { x: Math.floor(sx + adjusted.minX), y: Math.floor(sy + adjusted.minY), scale: placement.scale };
     };
   }
 
@@ -1669,6 +1682,7 @@
 
     const state = initial;
     const firstMask = state.background.slice();
+    const firstAlpha = Uint8ClampedArray.from({ length: state.width * state.height }, (_, p) => state.data[p * 4 + 3]);
     let placement;
     photo.mode = "studio";
     photo.canEdit = true;
@@ -1679,6 +1693,7 @@
       enumerable: true
     });
 
+    const bounds = { minX: product.minX, minY: product.minY, width: product.canvas.width, height: product.canvas.height };
     let current = product;
     photo.choice = "standard";
     makeAdjustable(photo, () => current, (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }));
@@ -1686,11 +1701,59 @@
     photo.choice = "standard";
 
     const render = () => {
-      const next = productCanvas(state);
+      const next = productCanvas(state, bounds);
       if (!next) return false;
       current = next;
       photo.renderVariants();
       return true;
+    };
+
+    // Erase and restore brush for the adjust dialog. (u, v) is a point on
+    // the preview (0 to 1), radius a fraction of the photo's width. Erase
+    // removes the cut-out there; restore brings back the original photo
+    // there, exactly as it was taken. Changes apply to the preview at once
+    // and are kept only by commitBrush; cancelBrush undoes them.
+    let snapshot = null;
+    photo.canBrush = true;
+    photo.beginBrush = () => {
+      snapshot = { background: state.background.slice(), alpha: Uint8ClampedArray.from({ length: state.width * state.height }, (_, p) => state.data[p * 4 + 3]) };
+    };
+    photo.brush = (u, v, radius, mode) => {
+      const centre = photo.toProduct(u, v, { fromPreview: true });
+      const reach = (radius * size) / centre.scale;
+      const { width, height, data, background, source } = state;
+      for (let y = Math.max(0, Math.floor(centre.y - reach)); y <= Math.min(height - 1, centre.y + reach); y += 1) {
+        for (let x = Math.max(0, Math.floor(centre.x - reach)); x <= Math.min(width - 1, centre.x + reach); x += 1) {
+          const d = Math.hypot(x - centre.x, y - centre.y);
+          if (d > reach) continue;
+          const p = y * width + x;
+          const i = p * 4;
+          // A soft brush edge, one pixel wide in the photo.
+          const strength = Math.min(1, reach - d + 0.5);
+          if (mode === "erase") {
+            data[i + 3] = Math.round(data[i + 3] * (1 - strength));
+            if (data[i + 3] < 10) background[p] = 1;
+          } else {
+            data[i] = source[i];
+            data[i + 1] = source[i + 1];
+            data[i + 2] = source[i + 2];
+            data[i + 3] = Math.max(background[p] ? 0 : data[i + 3], Math.round(255 * strength));
+            background[p] = 0;
+          }
+        }
+      }
+      const next = productCanvas(state, bounds);
+      if (next) current = next;
+    };
+    photo.cancelBrush = () => {
+      if (!snapshot) return;
+      state.background = snapshot.background;
+      for (let p = 0; p < snapshot.alpha.length; p += 1) state.data[p * 4 + 3] = snapshot.alpha[p];
+      snapshot = null;
+      current = productCanvas(state, bounds) || current;
+    };
+    photo.commitBrush = () => {
+      snapshot = null;
     };
 
     photo.removeAt = (u, v) => {
@@ -1711,6 +1774,7 @@
 
     photo.reset = () => {
       state.background = firstMask.slice();
+      for (let p = 0; p < firstAlpha.length; p += 1) state.data[p * 4 + 3] = firstAlpha[p];
       render();
     };
 

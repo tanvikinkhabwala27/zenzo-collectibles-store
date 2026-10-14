@@ -5500,3 +5500,53 @@ button.admin-stat:hover {
     padding: 12px;
   }
 }
+
+/* Erase / restore brush in the photo adjuster */
+.photo-adjuster__brush {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.photo-adjuster__brush[hidden],
+.photo-adjuster__cursor[hidden] {
+  display: none;
+}
+
+.photo-adjuster__modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.photo-adjuster__modes button {
+  min-height: 40px;
+  border-radius: 6px;
+  padding: 8px 6px;
+}
+
+.photo-adjuster .photo-adjuster__modes .is-active {
+  border-color: var(--red);
+  background: rgba(255, 59, 59, 0.22);
+}
+
+.photo-adjuster__brush > button {
+  min-height: 38px;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.photo-adjuster__preview.is-brushing {
+  cursor: none;
+}
+
+.photo-adjuster__cursor {
+  position: absolute;
+  z-index: 2;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}

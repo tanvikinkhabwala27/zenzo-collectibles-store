@@ -35,6 +35,20 @@
   // Without one (an original or full photo), the whole photo is adjusted.
   let live = null;
   let frame = 0;
+  // Erase / restore brush (studio photos with a cut-out only). tool is
+  // "move" (drag repositions), "erase" or "restore".
+  const brushPanel = dialog?.querySelector("[data-photo-brush]");
+  const brushSize = dialog?.querySelector('[name="brushSize"]');
+  const brushValue = dialog?.querySelector("[data-photo-brush-value]");
+  const cursor = dialog?.querySelector("[data-photo-cursor]");
+  const hint = dialog?.querySelector("[data-photo-hint]");
+  const hints = {
+    move: "Drag to reposition",
+    erase: "Paint over leftover background to erase it",
+    restore: "Paint to bring back the original photo"
+  };
+  let tool = "move";
+  let stroke = null;
 
   function loadImage(source) {
     return new Promise((resolve, reject) => {
@@ -134,8 +148,57 @@
     context.fillRect(0, 0, width, height);
   }
 
+  function setTool(name) {
+    tool = name;
+    for (const button of dialog.querySelectorAll("[data-photo-tool]")) {
+      const active = button.dataset.photoTool === name;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+    stage.classList.toggle("is-brushing", name !== "move");
+    hint.textContent = hints[name];
+    if (name === "move") cursor.hidden = true;
+  }
+
+  function brushRadius() {
+    return Number(brushSize.value) / 100;
+  }
+
+  // Paints from the last point to this one, in small steps, so a quick
+  // stroke leaves no gaps.
+  function paint(event) {
+    const box = canvas.getBoundingClientRect();
+    const point = { u: (event.clientX - box.left) / box.width, v: (event.clientY - box.top) / box.height };
+    const from = stroke.last || point;
+    const radius = brushRadius();
+    const steps = Math.max(1, Math.ceil(Math.hypot(point.u - from.u, point.v - from.v) / (radius / 3)));
+    for (let k = 1; k <= steps; k += 1) {
+      live.brush(from.u + ((point.u - from.u) * k) / steps, from.v + ((point.v - from.v) * k) / steps, radius, tool);
+    }
+    stroke.last = point;
+    draw();
+  }
+
+  function moveCursor(event) {
+    if (tool === "move" || !live?.canBrush) return;
+    const box = stage.getBoundingClientRect();
+    const canvasBox = canvas.getBoundingClientRect();
+    const diameter = brushRadius() * 2 * canvasBox.width;
+    cursor.hidden = false;
+    cursor.style.width = `${diameter}px`;
+    cursor.style.height = `${diameter}px`;
+    cursor.style.left = `${event.clientX - box.left}px`;
+    cursor.style.top = `${event.clientY - box.top}px`;
+  }
+
   function close(result = null) {
     drag = null;
+    stroke = null;
+    // Brush changes are kept only when the edited photo is used.
+    if (live?.canBrush) {
+      if (result) live.commitBrush();
+      else live.cancelBrush();
+    }
     if (dialog.open) dialog.close();
     const resolve = finish;
     finish = null;
@@ -158,6 +221,9 @@
     controls.zoom.min = live ? "40" : "100";
     // Only a studio photo has a separate background to lighten.
     controls.background.closest("[data-photo-background-control]").hidden = !live;
+    brushPanel.hidden = !live?.canBrush;
+    setTool("move");
+    if (live?.canBrush) live.beginBrush();
     dialog.showModal();
     const result = new Promise((resolve) => {
       finish = resolve;
@@ -195,6 +261,17 @@
       draw();
       return;
     }
+    const toolButton = event.target.closest("[data-photo-tool]");
+    if (toolButton) {
+      setTool(toolButton.dataset.photoTool);
+      return;
+    }
+    if (event.target.closest("[data-photo-brush-undo]") && live?.canBrush) {
+      live.cancelBrush();
+      live.beginBrush();
+      draw();
+      return;
+    }
     if (event.target.closest("[data-photo-reset]")) reset();
     if (event.target.closest("[data-photo-adjuster-close], [data-photo-adjuster-cancel]")) close(null);
     if (event.target.closest("[data-photo-adjuster-save]")) {
@@ -212,9 +289,18 @@
     close(null);
   });
 
+  brushSize.addEventListener("input", () => {
+    brushValue.value = `${brushSize.value}%`;
+  });
+
   stage.addEventListener("pointerdown", (event) => {
     if (!state.image && !live) return;
     stage.setPointerCapture(event.pointerId);
+    if (tool !== "move" && live?.canBrush) {
+      stroke = { pointerId: event.pointerId, last: null };
+      paint(event);
+      return;
+    }
     drag = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -225,6 +311,11 @@
   });
 
   stage.addEventListener("pointermove", (event) => {
+    moveCursor(event);
+    if (stroke && stroke.pointerId === event.pointerId) {
+      paint(event);
+      return;
+    }
     if (!drag || drag.pointerId !== event.pointerId) return;
     const scale = canvas.width / stage.clientWidth;
     state.offsetX = drag.offsetX + (event.clientX - drag.x) * scale;
@@ -232,7 +323,16 @@
     draw();
   });
 
+  stage.addEventListener("pointerleave", () => {
+    cursor.hidden = true;
+  });
+
   function endDrag(event) {
+    if (stroke && stroke.pointerId === event.pointerId) {
+      stroke = null;
+      if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+      return;
+    }
     if (!drag || drag.pointerId !== event.pointerId) return;
     drag = null;
     if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
