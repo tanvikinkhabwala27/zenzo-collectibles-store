@@ -1184,8 +1184,14 @@ async function serveStatic(req, res, url) {
     const cacheControl = extension === ".html"
       ? "no-store"
       : "public, max-age=300";
+    // The admin page is cross-origin isolated so the photo tool's AI can use
+    // several processor threads (much faster cut-outs).
+    const isolation = relativePath === "admin.html" || relativePath.startsWith("assets/studio/")
+      ? { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "credentialless" }
+      : {};
     res.writeHead(200, {
       ...securityHeaders,
+      ...isolation,
       "content-type": mimeTypes[extension] || "application/octet-stream",
       "cache-control": cacheControl
     });

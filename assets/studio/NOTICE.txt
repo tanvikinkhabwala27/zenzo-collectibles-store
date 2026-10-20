@@ -12,3 +12,9 @@ libheif-bundle.js
   libheif-js 1.23.5 (an Emscripten build of libheif by struktur AG),
   GNU LGPL 3.0. https://github.com/catdad-experiments/libheif-js
   Loaded only to open iPhone HEIC/HEIF photos in browsers that cannot.
+
+isnet-q8.onnx
+  IS-Net (DIS, "Highly Accurate Dichotomous Image Segmentation") by Xuebin
+  Qin et al., Apache License 2.0, general-use weights as published with
+  rembg; weights compressed to 8-bit for the browser.
+  https://github.com/xuebinqin/DIS

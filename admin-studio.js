@@ -324,7 +324,13 @@
   // It finds the product itself, so fuzzy edges, dark parts and busy or
   // textured backgrounds work, unlike the colour-based flood fill below,
   // which stays as the fallback when the model cannot load.
-  const modelSize = 320;
+  // Two models: ISNet (Apache-2.0, int8-compressed, 46 MB, 1024 px), which
+  // keeps whole products with fine detail, and U²-Net-p (4.6 MB, 320 px) as
+  // the fallback if ISNet cannot load (an old or low-memory computer).
+  const models = [
+    { url: "assets/studio/isnet-q8.onnx", size: 1024, mean: [0.5, 0.5, 0.5], deviation: [1, 1, 1] },
+    { url: "assets/studio/u2netp.onnx", size: 320, mean: [0.485, 0.456, 0.406], deviation: [0.229, 0.224, 0.225] }
+  ];
   let segmenter = null;
 
   function loadScript(src) {
@@ -341,8 +347,18 @@
     segmenter ||= (async () => {
       if (!window.ort) await loadScript("assets/studio/ort.wasm.min.js");
       window.ort.env.wasm.wasmPaths = new URL("assets/studio/", window.location.href).href;
-      window.ort.env.wasm.numThreads = 1;
-      return window.ort.InferenceSession.create("assets/studio/u2netp.onnx", { executionProviders: ["wasm"] });
+      // Several threads when the admin page is cross-origin isolated (set in
+      // vercel.json), which makes cut-outs several times faster.
+      window.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+      for (const model of models) {
+        try {
+          const session = await window.ort.InferenceSession.create(model.url, { executionProviders: ["wasm"] });
+          return { session, model };
+        } catch {
+          // Try the next, smaller model.
+        }
+      }
+      throw new Error("The photo tool could not load.");
     })().catch((error) => {
       segmenter = null;
       throw error;
@@ -353,7 +369,8 @@
   // Probability (0 to 1) that each pixel of a width x height copy of the
   // photo is product.
   async function productProbability(img, width, height) {
-    const session = await loadSegmenter();
+    const { session, model } = await loadSegmenter();
+    const modelSize = model.size;
     const input = document.createElement("canvas");
     input.width = modelSize;
     input.height = modelSize;
@@ -362,8 +379,7 @@
     const pixels = inputCtx.getImageData(0, 0, modelSize, modelSize).data;
     const plane = modelSize * modelSize;
     const tensor = new Float32Array(plane * 3);
-    const mean = [0.485, 0.456, 0.406];
-    const deviation = [0.229, 0.224, 0.225];
+    const { mean, deviation } = model;
     for (let p = 0; p < plane; p += 1) {
       for (let c = 0; c < 3; c += 1) tensor[c * plane + p] = (pixels[p * 4 + c] / 255 - mean[c]) / deviation[c];
     }
@@ -525,9 +541,18 @@
       }
     }
     const smooth = boxMean(votes, w, h, 2);
+    const backdropSum = backdrop[0] + backdrop[1] + backdrop[2];
+    // The backdrop, or a lighter or darker shade of it (the ring's own
+    // shadow on a wall or cloth).
+    const closeToBackdrop = (x, y) => distance(data, ((Math.round(y) * step) * width + Math.round(x) * step) * 4, ...backdrop) < 60;
     const looksLikeBackdrop = (x, y) => {
       const i = ((Math.round(y) * step) * width + Math.round(x) * step) * 4;
-      return distance(data, i, ...backdrop) < 60;
+      if (distance(data, i, ...backdrop) < 60) return true;
+      const sum = data[i] + data[i + 1] + data[i + 2];
+      const level = sum / backdropSum;
+      if (level < 0.35 || level > 1.15) return false;
+      for (let c = 0; c < 3; c += 1) if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.045) return false;
+      return true;
     };
     const rings = [];
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -566,8 +591,18 @@
       };
       const inside = share((d, x, y) => (d < r * 0.75 ? looksLikeBackdrop(x, y) : null));
       const around = share((d, x, y) => (d > r * 1.12 && d < r * 1.3 ? looksLikeBackdrop(x, y) : null));
-      const rim = share((d, x, y) => (Math.abs(d - r) < 2.5 ? !looksLikeBackdrop(x, y) : null));
-      if (inside >= 0.85 && around >= 0.6 && rim >= 0.55) rings.push({ x: cx * step, y: cy * step, r: r * step });
+      // The metal edge is judged by colour alone: grey metal would pass as
+      // a shade of the backdrop.
+      const rim = share((d, x, y) => (Math.abs(d - r) < 2.5 ? !closeToBackdrop(x, y) : null));
+      // A key ring is a thin band: just inside and just outside the metal
+      // there is backdrop again. A paw pad or a button is surrounded by thick
+      // product instead.
+      const thin = share((d, x, y) => {
+        const off = Math.abs(d - r);
+        return off > r * 0.14 && off < r * 0.28 ? looksLikeBackdrop(x, y) : null;
+      });
+      // Inside may be partly covered by what hangs through the ring (a hook).
+      if (inside >= 0.6 && around >= 0.6 && rim >= 0.55 && thin >= 0.7) rings.push({ x: cx * step, y: cy * step, r: r * step });
     }
     return rings;
   }
