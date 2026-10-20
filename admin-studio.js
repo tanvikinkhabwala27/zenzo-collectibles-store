@@ -180,6 +180,26 @@
     }
   }
 
+  // A quiet neutral edge behind dark products, matching the older accessory
+  // photos without changing the product colours themselves.
+  function softHalo(ctx, product, x, y, strength) {
+    const halo = document.createElement("canvas");
+    halo.width = product.width;
+    halo.height = product.height;
+    const haloCtx = context(halo);
+    haloCtx.drawImage(product, 0, 0);
+    haloCtx.globalCompositeOperation = "source-in";
+    haloCtx.fillStyle = `rgba(200, 205, 215, ${0.32 * strength})`;
+    haloCtx.fillRect(0, 0, halo.width, halo.height);
+    ctx.save();
+    ctx.filter = "blur(16px)";
+    ctx.drawImage(halo, x, y);
+    ctx.filter = "blur(5px)";
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(halo, x, y);
+    ctx.restore();
+  }
+
   function lightProduct(product, strength) {
     const lit = document.createElement("canvas");
     lit.width = product.width;
@@ -931,9 +951,10 @@
   // Accessory look, as in the accessory photos: a near-black seamless
   // background with faint red and blue at the sides, the product floating in
   // the middle with a soft shadow and no stand.
-  // The product photo on the background, and nothing else: no stand,
-  // shadow, glow or colour change, so it looks exactly as it is.
-  function composeFloating(ctx, product, { zoom = 1, offsetX = 0, offsetY = 0, background = 0 } = {}) {
+  // Match the finished accessory photos: the shared backdrop, restrained
+  // product contrast, a faint halo for dark edges and a soft grounding
+  // shadow. Manual zoom and position controls still work on the product.
+  function composeFloating(ctx, product, { accent = false, zoom = 1, offsetX = 0, offsetY = 0, background = 0 } = {}) {
     if (accessoryBackdrop) {
       ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
     } else {
@@ -965,12 +986,31 @@
     const scaled = document.createElement("canvas");
     scaled.width = Math.max(1, Math.round(width));
     scaled.height = Math.max(1, Math.round(height));
-    context(scaled).drawImage(image, 0, 0, scaled.width, scaled.height);
-    // Only an enlarged photo gets light sharpening, to undo the blur of
-    // enlarging.
-    if (scale > 1) sharpen(scaled, 0.35);
-    ctx.drawImage(scaled, x, y, width, height);
-    return { x, y, scale, minX: product.minX, minY: product.minY };
+    const scaledCtx = context(scaled);
+    scaledCtx.filter = "contrast(1.05) saturate(1.06)";
+    scaledCtx.drawImage(image, 0, 0, scaled.width, scaled.height);
+    sharpen(scaled, scale < 1 ? 0.35 : 0.55);
+
+    const darkness = (150 - brightness(scaled)) / 90;
+    const strength = Math.min(1, Math.max(0.35, darkness));
+    if (accent) backGlow(ctx, x, y, width, height);
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.filter = "blur(18px)";
+    ctx.beginPath();
+    ctx.ellipse(size / 2, y + height + size * 0.015, width * 0.4, Math.max(8, size * 0.018), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (accent) {
+      rimLight(ctx, scaled, x, y, strength);
+      ctx.drawImage(lightProduct(scaled, strength), x, y, width, height);
+    } else {
+      if (darkness > 0.1) softHalo(ctx, scaled, x, y, Math.min(1, darkness));
+      ctx.drawImage(scaled, x, y, width, height);
+    }
+    if (!accessoryBackdrop) vignette(ctx);
+    return { x, y, scale, minX: product.minX, minY: product.minY, dark: darkness > 0.35 };
   }
 
   // accent: false draws the standard look; true adds the red and blue edge
@@ -1560,7 +1600,7 @@
   // (re-renders both variants), drawPreview (draws one variant with trial
   // adjustments, for the adjust dialog) and toProduct (maps a point on the
   // finished photo back to the cut-out, for tap-to-remove).
-  function makeAdjustable(photo, getProduct, compose) {
+  function makeAdjustable(photo, getProduct, compose, { autoBackground = true, includeAccent = false } = {}) {
     let last = null;
     const draw = (ctx, variant, adjust) => {
       const adjusted = adjustProduct(getProduct(), adjust);
@@ -1574,10 +1614,13 @@
       return { adjusted, placement };
     };
     photo.adjustable = true;
-    photo.autoBackground = backgroundFor(getProduct());
+    // Floating photos use the fixed accessory backdrop exactly as the older
+    // product cards did. The red-glow slider remains available as an optional
+    // manual adjustment, but it no longer changes new uploads automatically.
+    photo.autoBackground = autoBackground ? backgroundFor(getProduct()) : 0;
     photo.adjustments = { ...noAdjustments, background: photo.autoBackground };
     photo.renderVariants = () => {
-      for (const variant of ["standard"]) {
+      for (const variant of includeAccent ? ["standard", "accent"] : ["standard"]) {
         const fresh = newCanvas();
         last = draw(context(fresh), variant, photo.adjustments);
         photo.variants[variant] = fresh.toDataURL("image/jpeg", quality);
@@ -1611,7 +1654,7 @@
   // leftover background around it; dataUrl always holds the latest result.
   // Cut-out photos also get variants { standard, accent } and a choice, which
   // starts on accent for dark products; dataUrl follows the choice.
-  async function createStudioPhoto(file, { studio = true, stand = true } = {}) {
+  async function createStudioPhoto(file, { studio = true, stand = true, classicAccessory = false } = {}) {
     const img = await loadImage(file);
     if (!stand) await loadBackdrop();
     const canvas = newCanvas();
@@ -1639,8 +1682,9 @@
       photo.mode = "unstand";
       photo.variants = {};
       photo.choice = "standard";
-      makeAdjustable(photo, () => standless, composeFloating);
-      photo.renderVariants();
+      makeAdjustable(photo, () => standless, composeFloating, { autoBackground: false, includeAccent: true });
+      const placement = photo.renderVariants();
+      photo.choice = placement.dark ? "accent" : "standard";
       delete photo.dataUrl;
       Object.defineProperty(photo, "dataUrl", {
         get: () => photo.variants[photo.choice],
@@ -1663,7 +1707,12 @@
       return photo;
     }
 
-    const initial = (await aiCutOut(img)) || prepareCutOut(img);
+    // The original accessory cards used the colour-based cut-out, which keeps
+    // thin metal rings and chain links fully opaque. Use that same path first
+    // for new accessories; AI remains the fallback for a difficult backdrop.
+    const initial = classicAccessory
+      ? prepareCutOut(img) || (await aiCutOut(img))
+      : (await aiCutOut(img)) || prepareCutOut(img);
     const product = initial && productCanvas(initial);
     if (!product) {
       // The product could not be separated: the photo as it is, cropped
@@ -1696,9 +1745,14 @@
     const bounds = { minX: product.minX, minY: product.minY, width: product.canvas.width, height: product.canvas.height };
     let current = product;
     photo.choice = "standard";
-    makeAdjustable(photo, () => current, (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }));
+    makeAdjustable(
+      photo,
+      () => current,
+      (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }),
+      { autoBackground: stand, includeAccent: !stand }
+    );
     placement = photo.renderVariants();
-    photo.choice = "standard";
+    photo.choice = !stand && placement.dark ? "accent" : "standard";
 
     const render = () => {
       const next = productCanvas(state, bounds);
