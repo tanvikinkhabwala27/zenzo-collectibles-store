@@ -521,6 +521,363 @@
     return rings;
   }
 
+  // Repairs only the detected key-ring band and the chain connected to it.
+  // Geometry supplies the missing alpha; RGB always comes from the photo.
+  function repairKeyRingHardware(state, backdrop, confidence, detail, candidate, rings) {
+    const { data, background, width } = state;
+    const total = background.length;
+    const height = total / width;
+    const before = background.slice();
+    const backdropSum = backdrop[0] + backdrop[1] + backdrop[2];
+    const backdropTone = (p) => {
+      const i = p * 4;
+      const sum = data[i] + data[i + 1] + data[i + 2];
+      const level = sum / backdropSum;
+      if (level < 0.12 || level > 1.2) return false;
+      for (let c = 0; c < 3; c += 1) {
+        if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.06) return false;
+      }
+      return true;
+    };
+    const clothTone = (p) => {
+      const i = p * 4;
+      const sum = data[i] + data[i + 1] + data[i + 2];
+      const level = sum / backdropSum;
+      if (level < 0.18 || level > 1.15) return false;
+      for (let c = 0; c < 3; c += 1) {
+        if (Math.abs(data[i + c] / sum - backdrop[c] / backdropSum) > 0.025) return false;
+      }
+      return true;
+    };
+    const restore = (p) => {
+      background[p] = 0;
+      candidate[p] = 0;
+      data[p * 4 + 3] = 255;
+    };
+    const clear = (p) => {
+      background[p] = 1;
+      candidate[p] = 0;
+      data[p * 4 + 3] = 0;
+    };
+
+    for (const ring of rings) {
+      const samples = Math.max(120, Math.round(Math.PI * ring.r));
+      const halfBand = Math.max(3, ring.r * 0.06);
+      const search = Math.max(3, Math.round(halfBand));
+      const centres = new Float32Array(samples);
+      const supported = new Uint8Array(samples);
+      const at = (radius, angle) => {
+        const x = Math.round(ring.x + Math.cos(angle) * radius);
+        const y = Math.round(ring.y + Math.sin(angle) * radius);
+        return x < 0 || y < 0 || x >= width || y >= height ? -1 : y * width + x;
+      };
+
+      // Follow the two real metal edges around the circle instead of using a
+      // single wide annulus, so cloth next to a tilted ring is not restored.
+      for (let a = 0; a < samples; a += 1) {
+        const angle = (a * Math.PI * 2) / samples;
+        let bestScore = -1;
+        let bestShift = 0;
+        for (let shift = -search; shift <= search; shift += 1) {
+          const inner = at(ring.r + shift - halfBand, angle);
+          const middle = at(ring.r + shift, angle);
+          const outer = at(ring.r + shift + halfBand, angle);
+          if (inner < 0 || middle < 0 || outer < 0) continue;
+          const pair = Math.min(detail[inner], detail[outer]);
+          const score = pair * 2 + (detail[inner] + detail[outer]) * 0.5
+            + detail[middle] * 0.15 + (!before[middle] ? 30 : 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestShift = shift;
+          }
+        }
+        centres[a] = ring.r + bestShift;
+        if (bestScore > 150) supported[a] = 1;
+      }
+
+      const smooth = centres.slice();
+      for (let a = 0; a < samples; a += 1) {
+        let sum = 0;
+        let count = 0;
+        for (let offset = -8; offset <= 8; offset += 1) {
+          const n = (a + offset + samples) % samples;
+          if (!supported[n]) continue;
+          sum += centres[n];
+          count += 1;
+        }
+        if (count) smooth[a] = sum / count;
+      }
+      // Bridge only short segmentation breaks. A real opening in the source
+      // is longer and remains an opening.
+      const solid = supported.slice();
+      for (let a = 0; a < samples; a += 1) {
+        if (solid[a]) continue;
+        for (let gap = 1; gap <= 7; gap += 1) {
+          if (supported[(a - gap + samples) % samples] && supported[(a + gap) % samples]) {
+            solid[a] = 1;
+            break;
+          }
+        }
+      }
+
+      const extent = ring.r + search + halfBand * 2;
+      for (let y = Math.max(0, Math.floor(ring.y - extent)); y < Math.min(height, Math.ceil(ring.y + extent)); y += 1) {
+        for (let x = Math.max(0, Math.floor(ring.x - extent)); x < Math.min(width, Math.ceil(ring.x + extent)); x += 1) {
+          const dx = x - ring.x;
+          const dy = y - ring.y;
+          const radius = Math.hypot(dx, dy);
+          let a = Math.round(((Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2)) * samples / (Math.PI * 2));
+          if (a === samples) a = 0;
+          const inner = smooth[a] - halfBand;
+          const outer = smooth[a] + halfBand;
+          const p = y * width + x;
+          if (solid[a] && radius >= inner && radius <= outer) {
+            restore(p);
+          } else if (radius < inner - 1) {
+            clear(p);
+          } else if (radius <= outer + halfBand * 1.8 && (backdropTone(p) || confidence[p] < 0.28)) {
+            clear(p);
+          }
+        }
+      }
+
+      // The product side has the strongest run of foreground beyond the
+      // ring. It defines a narrow chain-only corridor.
+      const bins = 72;
+      const directionScore = new Float32Array(bins);
+      const reach = ring.r * 2.8;
+      for (let y = Math.max(0, Math.floor(ring.y - reach)); y < Math.min(height, Math.ceil(ring.y + reach)); y += 1) {
+        for (let x = Math.max(0, Math.floor(ring.x - reach)); x < Math.min(width, Math.ceil(ring.x + reach)); x += 1) {
+          const dx = x - ring.x;
+          const dy = y - ring.y;
+          const radius = Math.hypot(dx, dy);
+          const p = y * width + x;
+          if (radius < ring.r * 1.18 || radius > reach || before[p]) continue;
+          if (detail[p] < 60 && backdropTone(p)) continue;
+          const angle = (Math.atan2(dy, dx) + Math.PI * 2) % (Math.PI * 2);
+          directionScore[Math.floor(angle * bins / (Math.PI * 2)) % bins] += 1 + Math.min(3, detail[p] / 120);
+        }
+      }
+      let direction = 0;
+      let bestDirection = -1;
+      for (let a = 0; a < bins; a += 1) {
+        let score = 0;
+        for (let offset = -2; offset <= 2; offset += 1) score += directionScore[(a + offset + bins) % bins];
+        if (score > bestDirection) {
+          bestDirection = score;
+          direction = (a * Math.PI * 2) / bins;
+        }
+      }
+      if (bestDirection <= 0) continue;
+
+      const ux = Math.cos(direction);
+      const uy = Math.sin(direction);
+      const sideLimit = Math.max(halfBand * 4, ring.r * 0.24);
+      const x0 = Math.max(0, Math.floor(Math.min(ring.x, ring.x + ux * reach) - sideLimit));
+      const y0 = Math.max(0, Math.floor(Math.min(ring.y, ring.y + uy * reach) - sideLimit));
+      const x1 = Math.min(width, Math.ceil(Math.max(ring.x, ring.x + ux * reach) + sideLimit));
+      const y1 = Math.min(height, Math.ceil(Math.max(ring.y, ring.y + uy * reach) + sideLimit));
+      const localWidth = x1 - x0;
+      const localHeight = y1 - y0;
+      const corridor = new Uint8Array(localWidth * localHeight);
+      const raw = new Uint8Array(localWidth * localHeight);
+      for (let y = y0; y < y1; y += 1) {
+        for (let x = x0; x < x1; x += 1) {
+          const dx = x - ring.x;
+          const dy = y - ring.y;
+          const along = dx * ux + dy * uy;
+          const side = Math.abs(dx * uy - dy * ux);
+          const q = (y - y0) * localWidth + x - x0;
+          if (along < ring.r * 0.72 || along > reach || side > sideLimit) continue;
+          corridor[q] = 1;
+          const p = y * width + x;
+          if (!before[p] && (detail[p] > 90 || (detail[p] > 45 && !backdropTone(p)))) raw[q] = 1;
+        }
+      }
+
+      // Close one- and two-pixel alpha breaks without growing the chain.
+      let closed = raw.slice();
+      for (let pass = 0; pass < 2; pass += 1) {
+        const grown = closed.slice();
+        for (let y = 1; y < localHeight - 1; y += 1) {
+          for (let x = 1; x < localWidth - 1; x += 1) {
+            const q = y * localWidth + x;
+            if (!corridor[q] || closed[q]) continue;
+            for (let dy = -1; dy <= 1 && !grown[q]; dy += 1) {
+              for (let dx = -1; dx <= 1; dx += 1) if (closed[q + dy * localWidth + dx]) grown[q] = 1;
+            }
+          }
+        }
+        closed = grown;
+      }
+      for (let pass = 0; pass < 2; pass += 1) {
+        const shrunk = closed.slice();
+        for (let y = 1; y < localHeight - 1; y += 1) {
+          for (let x = 1; x < localWidth - 1; x += 1) {
+            const q = y * localWidth + x;
+            if (!closed[q] || raw[q]) continue;
+            for (let dy = -1; dy <= 1; dy += 1) {
+              for (let dx = -1; dx <= 1; dx += 1) if (!closed[q + dy * localWidth + dx]) shrunk[q] = 0;
+            }
+          }
+        }
+        closed = shrunk;
+      }
+
+      // Keep only the closed shape attached to the detected ring.
+      const hardware = new Uint8Array(closed.length);
+      const queue = [];
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (!closed[q]) continue;
+          const radius = Math.hypot(x + x0 - ring.x, y + y0 - ring.y);
+          if (Math.abs(radius - ring.r) <= halfBand * 2) {
+            hardware[q] = 1;
+            queue.push(q);
+          }
+        }
+      }
+      for (let k = 0; k < queue.length; k += 1) {
+        const q = queue[k];
+        const x = q % localWidth;
+        const y = (q - x) / localWidth;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= localWidth || ny >= localHeight) continue;
+            const n = ny * localWidth + nx;
+            if (closed[n] && !hardware[n]) {
+              hardware[n] = 1;
+              queue.push(n);
+            }
+          }
+        }
+      }
+
+      const floodOutside = (mask) => {
+        const result = new Uint8Array(mask.length);
+        const open = [];
+        for (let q = 0; q < mask.length; q += 1) {
+          const x = q % localWidth;
+          const y = (q - x) / localWidth;
+          if (!mask[q] && (!corridor[q] || x === 0 || y === 0 || x === localWidth - 1 || y === localHeight - 1)) {
+            result[q] = 1;
+            open.push(q);
+          }
+        }
+        for (let k = 0; k < open.length; k += 1) {
+          const q = open[k];
+          const x = q % localWidth;
+          const y = (q - x) / localWidth;
+          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= localWidth || ny >= localHeight) continue;
+            const n = ny * localWidth + nx;
+            if (!mask[n] && !result[n]) {
+              result[n] = 1;
+              open.push(n);
+            }
+          }
+        }
+        return result;
+      };
+
+      // The broad AI component can contain a strip of cloth beneath the
+      // chain. Link openings give us the real metal geometry: keep only a
+      // narrow band around those openings, plus non-cloth connector pixels.
+      const initialOutside = floodOutside(hardware);
+      let nearHole = new Uint8Array(hardware.length);
+      for (let q = 0; q < hardware.length; q += 1) {
+        if (corridor[q] && !hardware[q] && !initialOutside[q]) nearHole[q] = 1;
+      }
+      const linkBand = Math.max(1, Math.min(2, Math.round(halfBand * 0.35)));
+      for (let pass = 0; pass < linkBand; pass += 1) {
+        const grown = nearHole.slice();
+        for (let y = 1; y < localHeight - 1; y += 1) {
+          for (let x = 1; x < localWidth - 1; x += 1) {
+            const q = y * localWidth + x;
+            if (!corridor[q] || nearHole[q]) continue;
+            for (let dy = -1; dy <= 1 && !grown[q]; dy += 1) {
+              for (let dx = -1; dx <= 1; dx += 1) if (nearHole[q + dy * localWidth + dx]) grown[q] = 1;
+            }
+          }
+        }
+        nearHole = grown;
+      }
+      let supportedMetal = new Uint8Array(hardware.length);
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (!hardware[q]) continue;
+          const p = (y + y0) * width + x + x0;
+          if (!clothTone(p) && detail[p] > 25) supportedMetal[q] = 1;
+        }
+      }
+      const bridge = Math.max(2, Math.min(4, Math.round(halfBand * 0.7)));
+      for (let pass = 0; pass < 2; pass += 1) {
+        const filled = supportedMetal.slice();
+        for (let y = bridge; y < localHeight - bridge; y += 1) {
+          for (let x = bridge; x < localWidth - bridge; x += 1) {
+            const q = y * localWidth + x;
+            if (!hardware[q] || !nearHole[q] || supportedMetal[q]) continue;
+            for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+              let beforeEdge = false;
+              let afterEdge = false;
+              for (let step = 1; step <= bridge; step += 1) {
+                beforeEdge ||= Boolean(supportedMetal[q - dy * step * localWidth - dx * step]);
+                afterEdge ||= Boolean(supportedMetal[q + dy * step * localWidth + dx * step]);
+              }
+              if (beforeEdge && afterEdge) {
+                filled[q] = 1;
+                break;
+              }
+            }
+          }
+        }
+        supportedMetal = filled;
+      }
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (!hardware[q]) continue;
+          const radius = Math.hypot(x + x0 - ring.x, y + y0 - ring.y);
+          const joinsRing = Math.abs(radius - ring.r) <= halfBand;
+          if (!joinsRing && !supportedMetal[q]) hardware[q] = 0;
+        }
+      }
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (!hardware[q]) continue;
+          restore((y + y0) * width + x + x0);
+        }
+      }
+
+      // Flood outside the repaired chain. Anything enclosed is a link hole,
+      // so cloth and its cast shadow are cleared together.
+      const outside = floodOutside(hardware);
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (corridor[q] && !hardware[q] && !outside[q]) clear((y + y0) * width + x + x0);
+        }
+      }
+      // The corridor ends at the chain attachment, so anything in it that
+      // is not supported metal is cloth or cast shadow touching the chain.
+      for (let y = 0; y < localHeight; y += 1) {
+        for (let x = 0; x < localWidth; x += 1) {
+          const q = y * localWidth + x;
+          if (!corridor[q] || hardware[q]) continue;
+          const p = (y + y0) * width + x + x0;
+          clear(p);
+        }
+      }
+    }
+  }
+
   // Cleans the refined outline using the backdrop's colour. Backdrop is a
   // pixel close to the backdrop colour, or a lighter or darker shade of it
   // (a fold, a cast shadow), that is not on a sharp edge: cloth folds are
@@ -536,13 +893,15 @@
     const height = total / width;
     const lum = new Float32Array(total);
     for (let p = 0; p < total; p += 1) lum[p] = (data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2]) / 3;
+    const detail = new Float32Array(total);
     const sharp = new Uint8Array(total);
     for (let y = 1; y < height - 1; y += 1) {
       for (let x = 1; x < width - 1; x += 1) {
         const p = y * width + x;
         const gx = lum[p - width + 1] + 2 * lum[p + 1] + lum[p + width + 1] - lum[p - width - 1] - 2 * lum[p - 1] - lum[p + width - 1];
         const gy = lum[p + width - 1] + 2 * lum[p + width] + lum[p + width + 1] - lum[p - width - 1] - 2 * lum[p - width] - lum[p - width + 1];
-        if (Math.hypot(gx, gy) > 150) sharp[p] = 1;
+        detail[p] = Math.hypot(gx, gy);
+        if (detail[p] > 150) sharp[p] = 1;
       }
     }
     // Widen sharp edges a little so a thin part between two of them (the
@@ -570,8 +929,11 @@
     const candidate = new Uint8Array(total);
     for (let p = 0; p < total; p += 1) if (!background[p] && looksLikeBackdrop(p)) candidate[p] = 1;
 
+    const rings = findKeyRings(state, backdrop);
+    repairKeyRingHardware(state, backdrop, confidence, detail, candidate, rings);
+
     // Backdrop inside key rings, even where the ring has a gap.
-    for (const ring of findKeyRings(state, backdrop)) {
+    for (const ring of rings) {
       const inner = ring.r - Math.max(3, ring.r * 0.06);
       for (let y = Math.max(0, Math.floor(ring.y - inner)); y < Math.min(height, ring.y + inner); y += 1) {
         for (let x = Math.max(0, Math.floor(ring.x - inner)); x < Math.min(width, ring.x + inner); x += 1) {
