@@ -30,9 +30,9 @@
     return ctx;
   }
 
-  function loadImage(file) {
+  function decodeImage(blob) {
     return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
+      const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
@@ -45,6 +45,57 @@
       img.src = url;
     });
   }
+
+  // iPhone photos are often HEIC, which most browsers other than Safari
+  // cannot open. Those are decoded in the browser with libheif (loaded only
+  // when needed) and returned as a canvas, which works everywhere an image
+  // does here.
+  let heifLibrary = null;
+  async function decodeHeic(file) {
+    heifLibrary ||= loadScript("assets/studio/libheif-bundle.js")
+      .then(() => (typeof window.libheif === "function" ? window.libheif() : window.libheif))
+      .catch((error) => {
+        heifLibrary = null;
+        throw error;
+      });
+    const lib = await heifLibrary;
+    const decoder = new lib.HeifDecoder();
+    const image = decoder.decode(new Uint8Array(await file.arrayBuffer()))[0];
+    if (!image) throw new Error("No image in this HEIC file.");
+    const width = image.get_width();
+    const height = image.get_height();
+    const pixels = await new Promise((resolve, reject) => {
+      image.display({ data: new Uint8ClampedArray(width * height * 4), width, height }, (result) => (result ? resolve(result) : reject(new Error("HEIC decode failed."))));
+    });
+    const full = document.createElement("canvas");
+    full.width = width;
+    full.height = height;
+    context(full).putImageData(new ImageData(pixels.data, width, height), 0, 0);
+    // Phone photos are very large; the editor never needs more than this.
+    const scale = Math.min(1, 3000 / Math.max(width, height));
+    if (scale === 1) return full;
+    const smaller = document.createElement("canvas");
+    smaller.width = Math.round(width * scale);
+    smaller.height = Math.round(height * scale);
+    context(smaller).drawImage(full, 0, 0, smaller.width, smaller.height);
+    return smaller;
+  }
+
+  async function loadImage(file) {
+    try {
+      return await decodeImage(file);
+    } catch (error) {
+      const heic = /\.(heic|heif)$/i.test(file.name || "") || /hei[cf]/i.test(file.type || "");
+      if (!heic) throw error;
+      try {
+        return await decodeHeic(file);
+      } catch {
+        throw new Error("This iPhone (HEIC) photo could not be opened. Try again, or export it as JPEG.");
+      }
+    }
+  }
+
+
 
   // Edge lights like the showcase photos: a narrow red light at the far left
   // and blue at the far right, falling off into the dark.

@@ -7,3 +7,8 @@ u2netp.onnx
 ort.wasm.min.js, ort-wasm-simd-threaded.mjs, ort-wasm-simd-threaded.wasm
   ONNX Runtime Web 1.20.1, Microsoft, MIT License.
   https://github.com/microsoft/onnxruntime
+
+libheif-bundle.js
+  libheif-js 1.23.5 (an Emscripten build of libheif by struktur AG),
+  GNU LGPL 3.0. https://github.com/catdad-experiments/libheif-js
+  Loaded only to open iPhone HEIC/HEIF photos in browsers that cannot.
