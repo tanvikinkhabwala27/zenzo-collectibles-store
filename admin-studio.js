@@ -1335,6 +1335,92 @@
     return { x, y, scale, minX: product.minX, minY: product.minY };
   }
 
+  // The whole photo, cropped square, as an opaque layer the editing tools can
+  // work on (see createStudioPhoto).
+  function fullFrameState(img) {
+    const canvas = newCanvas();
+    const frameCtx = context(canvas, { willReadFrequently: true });
+    composeOriginal(frameCtx, img);
+    const data = frameCtx.getImageData(0, 0, size, size).data;
+    return { width: size, height: size, data, background: new Uint8Array(size * size), source: new Uint8ClampedArray(data), underlay: photoBackdrop(canvas) };
+  }
+
+  // A smooth continuation of a photo's own background, made from the colours
+  // along its edges (filled inwards as a gentle gradient). It sits under a
+  // full photo layer, so erased areas blend into the photo's own background.
+  function photoBackdrop(photoCanvas) {
+    const cells = 48;
+    const small = document.createElement("canvas");
+    small.width = cells;
+    small.height = cells;
+    const smallCtx = context(small, { willReadFrequently: true });
+    smallCtx.drawImage(photoCanvas, 0, 0, cells, cells);
+    const pixels = smallCtx.getImageData(0, 0, cells, cells);
+    const colour = new Float32Array(cells * cells * 3);
+    const known = new Uint8Array(cells * cells);
+    for (let y = 0; y < cells; y += 1) {
+      for (let x = 0; x < cells; x += 1) {
+        const c = y * cells + x;
+        for (let k = 0; k < 3; k += 1) colour[c * 3 + k] = pixels.data[c * 4 + k];
+        if (x < 2 || y < 2 || x >= cells - 2 || y >= cells - 2) known[c] = 1;
+      }
+    }
+    // Relax the inside towards the average of its neighbours.
+    for (let pass = 0; pass < 400; pass += 1) {
+      for (let y = 1; y < cells - 1; y += 1) {
+        for (let x = 1; x < cells - 1; x += 1) {
+          const c = y * cells + x;
+          if (known[c]) continue;
+          for (let k = 0; k < 3; k += 1) {
+            colour[c * 3 + k] = (colour[(c - 1) * 3 + k] + colour[(c + 1) * 3 + k] + colour[(c - cells) * 3 + k] + colour[(c + cells) * 3 + k]) / 4;
+          }
+        }
+      }
+    }
+    for (let c = 0; c < cells * cells; c += 1) {
+      for (let k = 0; k < 3; k += 1) pixels.data[c * 4 + k] = colour[c * 3 + k];
+      pixels.data[c * 4 + 3] = 255;
+    }
+    smallCtx.putImageData(pixels, 0, 0);
+    const underlay = newCanvas();
+    const underlayCtx = context(underlay);
+    underlayCtx.filter = "blur(24px)";
+    underlayCtx.drawImage(small, -cells, -cells, size + cells * 2, size + cells * 2);
+    return underlay;
+  }
+
+  // The full photo layer over the studio background: unchanged until the
+  // admin erases part of it, zooms out or turns it.
+  function composeFullFrame(ctx, product, { zoom = 1, offsetX = 0, offsetY = 0, background = 0, underlay = null } = {}) {
+    if (underlay) {
+      ctx.drawImage(underlay, 0, 0, size, size);
+    } else if (accessoryBackdrop) {
+      ctx.drawImage(accessoryBackdrop, 0, 0, size, size);
+    } else {
+      ctx.fillStyle = "#0a0b0f";
+      ctx.fillRect(0, 0, size, size);
+      drawLights(ctx, 0.38, 0.62);
+    }
+    if (background > 0) {
+      ctx.save();
+      const glow = ctx.createRadialGradient(size / 2, size * 0.47, 0, size / 2, size * 0.47, size * 0.62);
+      for (const [stop, alpha] of [[0, 1], [0.35, 0.85], [0.65, 0.4], [1, 0]]) {
+        glow.addColorStop(stop, `rgba(150, 26, 38, ${alpha * background})`);
+      }
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, size, size);
+      ctx.restore();
+    }
+    const image = product.canvas;
+    const scale = Math.max(size / image.width, size / image.height) * zoom;
+    const width = image.width * scale;
+    const height = image.height * scale;
+    const x = (size - width) / 2 + offsetX * size;
+    const y = (size - height) / 2 + offsetY * size;
+    ctx.drawImage(image, x, y, width, height);
+    return { x, y, scale, minX: product.minX, minY: product.minY };
+  }
+
   // accent: false draws the standard look; true adds the red and blue edge
   // light, stronger for darker products. stand: false uses the accessory
   // look without the display base.
@@ -1922,7 +2008,7 @@
   // (re-renders both variants), drawPreview (draws one variant with trial
   // adjustments, for the adjust dialog) and toProduct (maps a point on the
   // finished photo back to the cut-out, for tap-to-remove).
-  function makeAdjustable(photo, getProduct, compose) {
+  function makeAdjustable(photo, getProduct, compose, { autoBackground = true } = {}) {
     let last = null;
     const draw = (ctx, variant, adjust) => {
       const adjusted = adjustProduct(getProduct(), adjust);
@@ -1936,7 +2022,7 @@
       return { adjusted, placement };
     };
     photo.adjustable = true;
-    photo.autoBackground = backgroundFor(getProduct());
+    photo.autoBackground = autoBackground ? backgroundFor(getProduct()) : 0;
     photo.adjustments = { ...noAdjustments, background: photo.autoBackground };
     photo.renderVariants = () => {
       for (const variant of ["standard"]) {
@@ -2011,42 +2097,34 @@
       return photo;
     }
 
+    // Photos already on a dark studio background, and photos the product
+    // cannot be separated from, are kept exactly as they are, but as a full
+    // photo layer over the studio background, so they get the same tools:
+    // erase (showing the studio background underneath), restore, rotate,
+    // zoom and move.
+    let fullFrame = false;
+    let initial = null;
     if (hasDarkBackdrop(img)) {
-      // Already on a dark studio background: kept exactly as it is.
       photo.mode = "restyle";
-      composeOriginal(ctx, img);
-      photo.variants = { standard: canvas.toDataURL("image/jpeg", quality) };
-      photo.choice = "standard";
-      delete photo.dataUrl;
-      Object.defineProperty(photo, "dataUrl", {
-        get: () => photo.variants[photo.choice],
-        enumerable: true
-      });
-      return photo;
+      fullFrame = true;
+      initial = fullFrameState(img);
+    } else {
+      initial = (await aiCutOut(img)) || prepareCutOut(img);
     }
-
-    const initial = (await aiCutOut(img)) || prepareCutOut(img);
-    const product = initial && productCanvas(initial);
+    let product = initial && productCanvas(initial);
     if (!product) {
-      // The product could not be separated: the photo as it is, cropped
-      // square.
       photo.mode = "studio-photo";
-      composeOriginal(ctx, img);
-      photo.variants = { standard: canvas.toDataURL("image/jpeg", quality) };
-      photo.choice = "standard";
-      delete photo.dataUrl;
-      Object.defineProperty(photo, "dataUrl", {
-        get: () => photo.variants[photo.choice],
-        enumerable: true
-      });
-      return photo;
+      fullFrame = true;
+      initial = fullFrameState(img);
+      product = productCanvas(initial);
     }
 
     const state = initial;
     const firstMask = state.background.slice();
     const firstAlpha = Uint8ClampedArray.from({ length: state.width * state.height }, (_, p) => state.data[p * 4 + 3]);
     let placement;
-    photo.mode = "studio";
+    if (!fullFrame) photo.mode = "studio";
+    photo.fullFrame = fullFrame;
     photo.canEdit = true;
     photo.variants = {};
     delete photo.dataUrl;
@@ -2058,7 +2136,14 @@
     const bounds = { minX: product.minX, minY: product.minY, width: product.canvas.width, height: product.canvas.height };
     let current = product;
     photo.choice = "standard";
-    makeAdjustable(photo, () => current, (ctx, item, options) => composeCutOut(ctx, item, { ...options, stand }));
+    makeAdjustable(
+      photo,
+      () => current,
+      (ctx, item, options) => (fullFrame
+        ? composeFullFrame(ctx, item, { ...options, underlay: initial.underlay })
+        : composeCutOut(ctx, item, { ...options, stand })),
+      { autoBackground: !fullFrame }
+    );
     placement = photo.renderVariants();
     photo.choice = "standard";
 
@@ -2090,8 +2175,8 @@
           if (d > reach) continue;
           const p = y * width + x;
           const i = p * 4;
-          // A soft brush edge, one pixel wide in the photo.
-          const strength = Math.min(1, reach - d + 0.5);
+          // A soft brush edge (the outer quarter fades), so strokes blend in.
+          const strength = Math.min(1, (reach - d + 0.5) / Math.max(1, reach * 0.25));
           if (mode === "erase") {
             data[i + 3] = Math.round(data[i + 3] * (1 - strength));
             if (data[i + 3] < 10) background[p] = 1;
