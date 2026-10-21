@@ -332,6 +332,7 @@
     { url: "assets/studio/u2netp.onnx", size: 320, mean: [0.485, 0.456, 0.406], deviation: [0.229, 0.224, 0.225] }
   ];
   let segmenter = null;
+  let segmenterReady = false;
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -347,9 +348,12 @@
     segmenter ||= (async () => {
       if (!window.ort) await loadScript("assets/studio/ort.wasm.min.js");
       window.ort.env.wasm.wasmPaths = new URL("assets/studio/", window.location.href).href;
-      // Several threads when the admin page is cross-origin isolated (set in
-      // vercel.json), which makes cut-outs several times faster.
-      window.ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+      // One thread: multi-threading needs special page headers and can hang
+      // when a host does not send them on every file.
+      window.ort.env.wasm.numThreads = 1;
+      // Run the model in a background worker so the page (and its progress
+      // message) stays responsive while a photo is being cut out.
+      window.ort.env.wasm.proxy = true;
       for (const model of models) {
         try {
           const session = await window.ort.InferenceSession.create(model.url, { executionProviders: ["wasm"] });
@@ -1074,14 +1078,30 @@
 
   // Same result shape as prepareCutOut, with soft edges kept in the alpha
   // channel. Returns null when the model is unavailable or finds nothing.
-  async function aiCutOut(img) {
+  // onStatus(text) reports progress for the preview. If the AI takes far
+  // too long (a stuck or very slow computer), the colour-based cut-out is
+  // used instead of waiting forever.
+  async function aiCutOut(img, onStatus = () => {}) {
     const scale = Math.min(1, workingSize / Math.max(img.width, img.height));
     const width = Math.max(1, Math.round(img.width * scale));
     const height = Math.max(1, Math.round(img.height * scale));
     let probability;
     try {
-      probability = await productProbability(img, width, height);
+      if (!segmenterReady) onStatus("Loading the photo AI (first photo only, about 45 MB)...");
+      await loadSegmenter();
+      segmenterReady = true;
+      onStatus("Cutting out the product (about 15 seconds)...");
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), 120000);
+      });
+      try {
+        probability = await Promise.race([productProbability(img, width, height), timeout]);
+      } finally {
+        clearTimeout(timer);
+      }
     } catch {
+      onStatus("Preparing photo...");
       return null;
     }
     const canvas = document.createElement("canvas");
@@ -1754,8 +1774,8 @@
     }
   }
 
-  async function aiProduct(img) {
-    const state = await aiCutOut(img);
+  async function aiProduct(img, onStatus) {
+    const state = await aiCutOut(img, onStatus);
     return state && productCanvas(state);
   }
 
@@ -2145,7 +2165,7 @@
   // leftover background around it; dataUrl always holds the latest result.
   // Cut-out photos also get variants { standard, accent } and a choice, which
   // starts on accent for dark products; dataUrl follows the choice.
-  async function createStudioPhoto(file, { studio = true, stand = true } = {}) {
+  async function createStudioPhoto(file, { studio = true, stand = true, onStatus = () => {} } = {}) {
     const img = await loadImage(file);
     if (!stand) await loadBackdrop();
     const canvas = newCanvas();
@@ -2167,7 +2187,7 @@
     // Non-car photos that were made with the stand: move the product onto the
     // floating accessory look.
     const standless = !stand && hasDarkBackdrop(img)
-      ? extractFromStandPhoto(img) || (!matchesAccessoryBackdrop(img) && (await aiProduct(img) || extractFromDarkPhoto(img)))
+      ? extractFromStandPhoto(img) || (!matchesAccessoryBackdrop(img) && (await aiProduct(img, onStatus) || extractFromDarkPhoto(img)))
       : null;
     if (standless) {
       photo.mode = "unstand";
@@ -2195,7 +2215,7 @@
       fullFrame = true;
       initial = fullFrameState(img);
     } else {
-      initial = (await aiCutOut(img)) || prepareCutOut(img);
+      initial = (await aiCutOut(img, onStatus)) || prepareCutOut(img);
     }
     let product = initial && productCanvas(initial);
     if (!product) {

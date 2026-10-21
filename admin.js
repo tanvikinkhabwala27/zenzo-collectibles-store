@@ -316,7 +316,10 @@ async function preparePhoto(form) {
   }
   const job = window.zenzoStudio.createStudioPhoto(file, {
     studio: form.elements.studio?.checked !== false,
-    stand: usesStand(form.elements.collection?.value)
+    stand: usesStand(form.elements.collection?.value),
+    onStatus: (text) => {
+      if (preview && preparedPhotos.get(form) === job) preview.querySelector("p").textContent = text;
+    }
   });
   preparedPhotos.set(form, job);
   if (preview) {
